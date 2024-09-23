@@ -9,7 +9,7 @@ pio.renderers.default='browser'
 # from scipy.interpolate import griddata
 #from CUSTOS import custos
 import time 
-
+#sou lindo
 
 t0 = time.time()
 # DADOS DE ENTRADA ALGORITIMO DE ROTA
