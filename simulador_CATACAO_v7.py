@@ -11,6 +11,189 @@ pio.renderers.default='browser'
 import time 
 #sou lindo
 import os
+from ipywidgets import interact, fixed
+import ipywidgets as widgets
+from scipy.interpolate import griddata
+from IPython.display import display  # Import display function
+
+def compila(df):
+    # Corrigir separadores decimais e converter para numérico
+    numeric_columns = df.select_dtypes(include=['object', 'string']).columns.tolist()
+    for col in numeric_columns:
+        # Tenta converter strings numéricas com vírgulas em floats
+        df[col] = df[col].str.replace(',', '.').astype(float)
+    
+    # Obter a lista de colunas numéricas
+    columns = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Exibir a quantidade de dados por variável
+    print("\nQuantidade de pontos de dados por variável:")
+    for col in columns:
+        data = df[col]
+        num_unique = data.nunique()
+        num_total = data.count()
+        dtype = data.dtype
+        print(f"{col}: {num_total} pontos, {num_unique} únicos, Tipo: {dtype}")
+    
+    if len(columns) < 3:
+        print("\nNão há variáveis numéricas suficientes para plotar.")
+        return
+    
+    print("\nVariáveis disponíveis para plotagem:")
+    for idx, col in enumerate(columns):
+        print(f"{idx}: {col}")
+    
+    # Opção de escolher o tipo de gráfico
+    print("\nEscolha o tipo de gráfico:")
+    print("1: Superfície Interpolada")
+    print("2: Gráfico de Dispersão 3D")
+    plot_type = input("Digite 1 ou 2: ").strip()
+    
+    if plot_type not in ['1', '2']:
+        print("Opção inválida.")
+        return
+    
+    # Obter a entrada do usuário para as variáveis
+    x_var_idx = int(input("\nSelecione o índice para a variável do eixo X: "))
+    y_var_idx = int(input("Selecione o índice para a variável do eixo Y: "))
+    z_var_idx = int(input("Selecione o índice para a variável do eixo Z: "))
+    
+    x_var = columns[x_var_idx]
+    y_var = columns[y_var_idx]
+    z_var = columns[z_var_idx]
+    
+    if plot_type == '1':
+        # Solicitar variável de controle para o slider
+        slider_var_idx = int(input("Selecione o índice para a variável de controle (slider): "))
+        slider_var = columns[slider_var_idx]
+        unique_slider_values = np.sort(df[slider_var].unique())
+        
+        # Criar uma grade de valores x e y
+        x_lin = np.linspace(df[x_var].min(), df[x_var].max(), 50)
+        y_lin = np.linspace(df[y_var].min(), df[y_var].max(), 50)
+        X_grid, Y_grid = np.meshgrid(x_lin, y_lin)
+        
+        # Inicializar a figura
+        fig = go.Figure()
+        
+        # Criar quadros para cada valor da variável de controle
+        frames = []
+        for value in unique_slider_values:
+            data_subset = df[df[slider_var] == value]
+            if len(data_subset) < 3:
+                print(f"Pulando o valor {value} do slider devido a pontos de dados insuficientes ({len(data_subset)}).")
+                continue
+            
+            # Interpolar valores z na grade
+            try:
+                Z_grid = griddata(
+                    (data_subset[x_var], data_subset[y_var]),
+                    data_subset[z_var],
+                    (X_grid, Y_grid),
+                    method='linear'
+                )
+                
+                # Verificar se Z_grid contém todos NaNs
+                if np.isnan(Z_grid).all():
+                    print(f"Pulando o valor {value} do slider porque a interpolação resultou em todos NaNs.")
+                    continue
+                
+                # Criar a superfície
+                surface = go.Surface(
+                    x=X_grid,
+                    y=Y_grid,
+                    z=Z_grid,
+                    colorscale='Viridis',
+                    cmin=df[z_var].min(),
+                    cmax=df[z_var].max(),
+                    showscale=False,
+                    name=str(value)
+                )
+                
+                frames.append(go.Frame(data=[surface], name=str(value)))
+            
+            except Exception as e:
+                print(f"Pulando o valor {value} do slider devido ao erro de interpolação: {e}")
+                continue
+        
+        if not frames:
+            print("Nenhum quadro foi criado. Verifique se as variáveis selecionadas possuem dados suficientes.")
+            return
+        
+        # Dados iniciais
+        initial_frame = frames[0]
+        
+        # Layout com slider
+        sliders = [dict(
+            steps=[dict(method='animate',
+                        args=[[frame.name], dict(mode='immediate',
+                                                 frame=dict(duration=500, redraw=True),
+                                                 transition=dict(duration=0))],
+                        label=frame.name) for frame in frames],
+            transition=dict(duration=0),
+            x=0,
+            y=0,
+            currentvalue=dict(font=dict(size=12), prefix=slider_var + ': ', visible=True, xanchor='center'),
+            len=1.0
+        )]
+        
+        layout = go.Layout(
+            title='Gráfico Interativo de Superfície 3D',
+            scene=dict(
+                xaxis=dict(title=x_var),
+                yaxis=dict(title=y_var),
+                zaxis=dict(title=z_var)
+            ),
+            sliders=sliders,
+            updatemenus=[dict(
+                type='buttons',
+                showactive=False,
+                y=1,
+                x=1.05,
+                xanchor='left',
+                yanchor='bottom',
+                buttons=[dict(label='Play',
+                              method='animate',
+                              args=[None, dict(frame=dict(duration=500, redraw=True),
+                                               transition=dict(duration=0),
+                                               fromcurrent=True,
+                                               mode='immediate')])]
+            )]
+        )
+        
+        fig = go.Figure(data=initial_frame.data, frames=frames, layout=layout)
+        
+    elif plot_type == '2':
+        # Criar o gráfico de dispersão 3D
+        fig = go.Figure(data=[go.Scatter3d(
+            x=df[x_var],
+            y=df[y_var],
+            z=df[z_var],
+            mode='markers',
+            marker=dict(
+                size=5,
+                color='blue'
+            )
+        )])
+        
+        fig.update_layout(
+            title='Gráfico de Dispersão 3D',
+            scene=dict(
+                xaxis=dict(title=x_var),
+                yaxis=dict(title=y_var),
+                zaxis=dict(title=z_var)
+            )
+        )
+    
+    # Exibir o gráfico no navegador
+    fig.show(renderer="browser")
+    
+    # Opcionalmente, salvar o gráfico em um arquivo HTML
+    save_option = input("Deseja salvar o gráfico como um arquivo HTML? (sim/não): ").strip().lower()
+    if save_option == 'sim':
+        filename = input("Digite o nome do arquivo (com extensão .html): ").strip()
+        fig.write_html(filename)
+        print(f"Gráfico salvo como {filename}")
 
 # Definir o caminho das pastas
 dados_path = os.path.join(os.getcwd(), "Dado0s")
@@ -46,8 +229,8 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.linspace(10,30,3)
-combs_vetor = np.linspace(1,10,10)
+volume_tanque = np.linspace(10,50,3)
+combs_vetor = np.linspace(1,20,10)
 
 produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -1042,3 +1225,19 @@ for k in range(len(resultados)):
 # Salvar o gráfico 3D na pasta `Resultados`
 saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
 fig_trajeto.write_html(saida_html)
+
+# Assuming df1 is your DataFrame with the results
+
+# Supondo que 'df' é o seu DataFrame
+# Primeiro, identifique as colunas que precisam ser corrigidas
+numeric_columns = df.columns.tolist()
+
+# Remova colunas não numéricas ou que não precisam de correção
+# Por exemplo, se 'STATUS' é uma coluna de texto, podemos excluí-la
+numeric_columns.remove('STATUS')
+
+# Substitua vírgulas por pontos e converta para float
+for col in numeric_columns:
+    df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
+
+compila(df)
