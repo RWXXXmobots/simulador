@@ -46,7 +46,7 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.linspace(40,40,1)
+volume_tanque = np.linspace(10,150,15)
 combs_vetor = np.linspace(1,30,30)
 
 produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -56,7 +56,7 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
-    #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
+    print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
