@@ -10,10 +10,26 @@ pio.renderers.default='browser'
 #from CUSTOS import custos
 import time 
 #sou lindo
+import os
+
+# Definir o caminho das pastas
+dados_path = os.path.join(os.getcwd(), "Dados")
+resultados_path = os.path.join(os.getcwd(), "Resultados")
+
+# Verificar se as pastas existem, caso contrário, criar
+if not os.path.exists(dados_path):
+    os.makedirs(dados_path)
+
+if not os.path.exists(resultados_path):
+    os.makedirs(resultados_path)
 
 t0 = time.time()
 # DADOS DE ENTRADA ALGORITIMO DE ROTA
-df = pd.read_csv("dados-simulador_18%_enrico.csv", delimiter=';')
+# Definir o arquivo CSV de entrada
+csv_file = os.path.join(dados_path, "dados-simulador.csv")
+
+# Carregar o arquivo CSV
+df = pd.read_csv(csv_file, delimiter=';')
 xp = df['x[m]'].values
 yp = df['y[m]'].values
 a_tot = df['area.total[m2]'].values
@@ -30,8 +46,8 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.linspace(10,150,15)
-combs_vetor = np.linspace(1,30,30)
+volume_tanque = np.linspace(10,60,6)
+combs_vetor = np.linspace(1,10,10)
 
 produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -902,8 +918,8 @@ for aa in range(len(combs_vetor)):
 # figure1.legend(loc='upper left', bbox_to_anchor=(0.0, 1), borderaxespad=0.1)
 
 
-for k in range(len(resultados)):
-    resultados[k].to_excel("RESULTADOS " +str(k) + " .xlsx")
+#for k in range(len(resultados)):
+#    resultados[k].to_excel("RESULTADOS " +str(k) + " .xlsx")
 
 
 
@@ -1015,4 +1031,13 @@ fig_trajeto = go.Figure()
 
 fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
 fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
-fig_trajeto.write_html("saida_sem_discreziar.html")
+#fig_trajeto.write_html("saida_sem_discreziar.html")
+
+# Ao final de cada simulação, salvar os resultados na pasta `Resultados`
+for k in range(len(resultados)):
+    resultado_file = os.path.join(resultados_path, f"RESULTADOS_{k}.xlsx")
+    resultados[k].to_excel(resultado_file)
+
+# Salvar o gráfico 3D na pasta `Resultados`
+saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
+fig_trajeto.write_html(saida_html)
