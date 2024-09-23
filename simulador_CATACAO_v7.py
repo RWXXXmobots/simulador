@@ -229,8 +229,13 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
+<<<<<<< HEAD
 volume_tanque = np.linspace(10,50,3)
 combs_vetor = np.linspace(1,20,10)
+=======
+volume_tanque = np.linspace(40,40,1)
+combs_vetor = np.linspace(1,30,30)
+>>>>>>> 5c9daa9d183ece4c5006bc446d93b947899ecf70
 
 produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -239,6 +244,7 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
+    #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -851,7 +857,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                     M_comb[i+1] = M_comb_max
                     M_pulv[i+1] = M_pulv_max
                     n_abs = n_abs + 1
-                    t[i+1] = t[i+1] + t_abs_comb
+                    t[i+1] = t[i+1] + max(t_abs_calda,t_abs_comb)
                     theta[i+1] = -alpha - 90
                     #print(theta[i+1])
                     if voo == 1:
@@ -952,7 +958,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         VDESLOC.append(v_desloc)
         
         if (aa != 0):
-            if tempo_missao[len(tempo_missao)-1] >= tempo_missao[len(tempo_missao)-2]:
+            if n_abs == 0:
                 print("t2[h]: ",round(tempo_missao[len(tempo_missao)-1],4) ,"// t1[h]: ",round(tempo_missao[len(tempo_missao)-2],4) )
                 break
 
