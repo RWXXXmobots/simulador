@@ -13,7 +13,7 @@ import time
 import os
 
 # Definir o caminho das pastas
-dados_path = os.path.join(os.getcwd(), "Dados")
+dados_path = os.path.join(os.getcwd(), "Dado0s")
 resultados_path = os.path.join(os.getcwd(), "Resultados")
 
 # Verificar se as pastas existem, caso contrário, criar
@@ -46,7 +46,7 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.linspace(10,60,6)
+volume_tanque = np.linspace(10,30,3)
 combs_vetor = np.linspace(1,10,10)
 
 produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -55,7 +55,7 @@ area_total = 1000               # [ha]
 resultados = []
 it = 0
 
-for aa in range(len(combs_vetor)):
+for bb,M_pulv_max in enumerate(volume_tanque):
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -88,12 +88,12 @@ for aa in range(len(combs_vetor)):
     faixa_vector = []
     tempo_por_voo = []
     tempo_util = []
-    capex = np.zeros(len(volume_tanque))
+    capex = []
     drone_e_bateria = []
     abastecimentos = []
-    preco_drone_bateria = np.zeros(len(volume_tanque))
+    preco_drone_bateria = []
     CALDA_CONS = []
-    preco_por_ha_real = np.zeros(len(volume_tanque))
+    preco_por_ha_real = []
     tanque = 0
     AUTONOMIA_PROJ = []
     MASSA_ESTRUTURA = []
@@ -102,9 +102,9 @@ for aa in range(len(combs_vetor)):
     VPULV = []
     VDESLOC = []
     PGERADOR = []
-    for bb,M_pulv_max in enumerate(volume_tanque):
-        
-        print(round(bb/(len(volume_tanque)-1)*100,2),"%")
+    for aa in range(len(combs_vetor)):
+        print(aa)
+        #print(round(bb/(len(volume_tanque)-1)*100,2),"%")
         # PULVERIZAÇÃO
         #Taxa = 10.0                               #[L/ha]      
         v_pulv = 1.0                              #[m/s]
@@ -732,42 +732,47 @@ for aa in range(len(combs_vetor)):
             
             
 #---------------- VETORES PARA RESULTADOS ---------------------------------#
-        # #faixa_vector.append(faixa)
-        tempo_missao.append(round(max(t)/3600,2))
-        # #dias.append(math.ceil(area_total/(X**2/10**4)))
-        MTOW.append(round(M_tot_in,2))
+        # faixa_vector.append(faixa)
+        tempo_missao.append(max(t) / 3600)  # Removido o arredondamento
+        # dias.append(math.ceil(area_total/(X**2/10**4)))
+        MTOW.append(M_tot_in)  # Removido o arredondamento
         # produtividade.append(X**2/10**4/(max(t)/3600))
-        # #talhao_maximus.append(X**2/10**4)
+        # talhao_maximus.append(X**2/10**4)
         voo_vector.append(voo)
         # area_por_voo.append(X**2/10**4/voo)
-        vol_comb.append(round(comb_cons[i]/0.715,2))
+        vol_comb.append(comb_cons[i] / 0.715)  # Removido o arredondamento
         # vazao_bombas.append(vazao)
-        dist_percorrida.append(round(dist_percorr[i]/1000,2))
-        dist_pulverizando.append(round(dist_pulv[i]/1000,2))
-        EOC_km.append(round(dist_pulv[i]/dist_percorr[i],2))
-        EOC_hr.append(round(t_pulv[i]/t_de_voo[i],2))
+        dist_percorrida.append(dist_percorr[i] / 1000)  # Removido o arredondamento
+        dist_pulverizando.append(dist_pulv[i] / 1000)  # Removido o arredondamento
+        EOC_km.append(dist_pulv[i] / dist_percorr[i])  # Removido o arredondamento
+        EOC_hr.append(t_pulv[i] / t_de_voo[i])  # Removido o arredondamento
         abastecimentos.append(n_abs)
         # capacidade_vector.append(cap_bat)
         TANQUES.append(M_pulv_max)
-        RTLS.append(round(rtl_acumulado,2))
-        CALDA_CONS.append(round(calda_cons[i],2))
+        RTLS.append(rtl_acumulado)  # Removido o arredondamento
+        CALDA_CONS.append(calda_cons[i])  # Removido o arredondamento
         operacao.append(STATUS[i])
-        
         
         # (preco_por_ha_real[tanque],preco_drone_bateria[tanque]) = custos(M_pulv_max,cap_bat,area_total,t_de_voo[i]/3600,comb_cons[i]/0.715,voo,n_abs,math.ceil(area_total/(X**2/10**4)),X**2/10**4)
         # capex[tanque] = produtividade[tanque]/preco_drone_bateria[tanque]
-        tempo_util.append(round(t_de_voo[i]/3600,2))
-        tempo_idas_vindas.append(round(Tempo_rtl/3600,2))
-        tempo_manobra.append(round(t_manobra[i]/3600,2))
-        tempo_por_voo.append(round(t_de_voo[i]/voo/60,2))
+        tempo_util.append(t_de_voo[i] / 3600)  # Removido o arredondamento
+        tempo_idas_vindas.append(Tempo_rtl / 3600)  # Removido o arredondamento
+        tempo_manobra.append(t_manobra[i] / 3600)  # Removido o arredondamento
+        tempo_por_voo.append(t_de_voo[i] / voo / 60)  # Removido o arredondamento
         
-        AUTONOMIA_PROJ.append(round(M_comb_max/((((0.009424 * P_gerador_max )*1/60)*(1-ganho_cons))/1000)/3600,2))
-        MASSA_ESTRUTURA.append(round(M_estrut,2))
-        COMBUSTIVEL.append(round(M_comb_max,2))
-        GERADOR.append(round(M_gerador,2))
-        PGERADOR.append(round(P_gerador_max,2))
+        AUTONOMIA_PROJ.append(M_comb_max / ((((0.009424 * P_gerador_max) * 1 / 60) * (1 - ganho_cons)) / 1000) / 3600)  # Removido o arredondamento
+        MASSA_ESTRUTURA.append(M_estrut)  # Removido o arredondamento
+        COMBUSTIVEL.append(M_comb_max)  # Removido o arredondamento
+        GERADOR.append(M_gerador)  # Removido o arredondamento
+        PGERADOR.append(P_gerador_max)  # Removido o arredondamento
         VPULV.append(v_pulv)
         VDESLOC.append(v_desloc)
+        
+        if (aa != 0):
+            if tempo_missao[len(tempo_missao)-1] >= tempo_missao[len(tempo_missao)-2]:
+                print("t2[h]: ",round(tempo_missao[len(tempo_missao)-1],4) ,"// t1[h]: ",round(tempo_missao[len(tempo_missao)-2],4) )
+                break
+
         
         # X0 = X - 10; Y0 = X0
         # print("-->",M_pulv_max,faixa, X, max(t)/3600,capex[tanque],tanque)
@@ -793,49 +798,45 @@ for aa in range(len(combs_vetor)):
     produtividade = [100/x for x in tempo_missao]
     
     data = {
-    #     "Faixa [m]": faixa_vector,
-        "Volume de calda [L]": volume_tanque,
+        # "Faixa [m]": faixa_vector,
+        "Volume de calda [L]": [round(x, 2) for x in TANQUES], 
         "STATUS": operacao,
-        "Capacidade operacional [ha/h]": produtividade,
-        "Tempo de missao [h]": tempo_missao,
-        "Tempo util [h]": tempo_util,
-        "Tempo por voo [min]":tempo_por_voo,
-        "Autonomia Projetada [h]": AUTONOMIA_PROJ,
-        "N° Voos": voo_vector,
-    #     "Tempo operacional dias": dias,
-        "MTOW [kg]": MTOW,
-        
-        "Massa Estrutura [kg]": MASSA_ESTRUTURA,
-        "Combustível [kg]": COMBUSTIVEL,
-        "Abastecimentos": abastecimentos,
-        "Massa gerador": GERADOR,
-        "´Potencia gerador [W]": PGERADOR,
-    #     "Area pulverizada por dia [ha]": talhao_maximus,
-        
-    #     "Hectare por voo [ha/voo]": area_por_voo,
-    #     "Capacidade bateria [mha]": capacidade_vector, 
-        "Combustivel consumido [L]": vol_comb,
-        "Calda cons [L]": CALDA_CONS,
-    #     "Vazao [L/min]": vazao_bombas,
-        "Distancia percorrida [km]": dist_percorrida,
-        "Distancia Pulverizando [km]": dist_pulverizando,
-        "RTL ACUMULADO[m]": RTLS,
-        "EOC [km/km]": EOC_km,
-        "EOC [h/h]": EOC_hr,
-        "Tempo de manobra [h]": tempo_manobra,
-        "Tempo rtl_rtw [h]": tempo_idas_vindas,
-        "V pulv[m/s]": VPULV,
-        "V desloc [m/s]": VDESLOC
+        "Capacidade operacional [ha/h]": [round(x, 2) for x in produtividade],
+        "Tempo de missao [h]": [round(x, 2) for x in tempo_missao],
+        "Tempo util [h]": [round(x, 2) for x in tempo_util],
+        "Tempo por voo [min]": [round(x, 2) for x in tempo_por_voo],
+        "Autonomia Projetada [h]": [round(x, 2) for x in AUTONOMIA_PROJ],
+        "N° Voos": [round(x, 2) for x in voo_vector],
+        # "Tempo operacional dias": dias,
+        "MTOW [kg]": [round(x, 2) for x in MTOW],
+        "Massa Estrutura [kg]": [round(x, 2) for x in MASSA_ESTRUTURA],
+        "Combustível [kg]": [round(x, 2) for x in COMBUSTIVEL],
+        "Abastecimentos": [round(x, 2) for x in abastecimentos],
+        "Massa gerador": [round(x, 2) for x in GERADOR],
+        "Potência gerador [W]": [round(x, 2) for x in PGERADOR],
+        # "Area pulverizada por dia [ha]": talhao_maximus,
+        # "Hectare por voo [ha/voo]": area_por_voo,
+        # "Capacidade bateria [mha]": capacidade_vector, 
+        "Combustível consumido [L]": [round(x, 2) for x in vol_comb],
+        "Calda cons [L]": [round(x, 2) for x in CALDA_CONS],
+        # "Vazao [L/min]": vazao_bombas,
+        "Distância percorrida [km]": [round(x, 2) for x in dist_percorrida],
+        "Distância Pulverizando [km]": [round(x, 2) for x in dist_pulverizando],
+        "RTL ACUMULADO[m]": [round(x, 2) for x in RTLS],
+        "EOC [km/km]": [round(x, 2) for x in EOC_km],
+        "EOC [h/h]": [round(x, 2) for x in EOC_hr],
+        "Tempo de manobra [h]": [round(x, 2) for x in tempo_manobra],
+        "Tempo rtl_rtw [h]": [round(x, 2) for x in tempo_idas_vindas],
+        "V pulv [m/s]": [round(x, 2) for x in VPULV],
+        "V desloc [m/s]": [round(x, 2) for x in VDESLOC],
+    }
+
+
  
     #     "CAPEX [ha/h/R$]": capex,
     #     "Preco por ha real": preco_por_ha_real,
     #     "Preco drone, carreg e bat": preco_drone_bateria,
 
-
-       
-        
-        
-    }
     
     
     # vol = []
