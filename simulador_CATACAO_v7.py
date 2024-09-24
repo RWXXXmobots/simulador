@@ -15,6 +15,138 @@ from ipywidgets import interact, fixed
 import ipywidgets as widgets
 from scipy.interpolate import griddata
 from IPython.display import display  # Import display function
+import glob
+import threading
+import shutil
+
+def unificar_planilhas():
+    """
+    Unifica várias planilhas Excel em uma única, com opções interativas e gráficos 2D.
+    Também move os arquivos originais para uma subpasta 'Arquivos_brutos'.
+    """
+    # Caminho para a pasta 'Resultados'
+    pasta_resultados = 'Resultados/'
+    pasta_brutos = os.path.join(pasta_resultados, 'Arquivos_brutos')
+
+    # Cria a pasta 'Arquivos_brutos' se não existir
+    if not os.path.exists(pasta_brutos):
+        os.makedirs(pasta_brutos)
+
+    # Lista todos os arquivos xlsx na pasta 'Resultados' com o padrão de nomenclatura
+    arquivos_excel = glob.glob(os.path.join(pasta_resultados, 'RESULTADOS_*.xlsx'))
+
+    # Dicionário para armazenar DataFrames
+    planilhas = {}
+
+    # Lê cada arquivo e armazena no dicionário
+    for arquivo in arquivos_excel:
+        nome_arquivo = os.path.basename(arquivo)
+        nome_planilha = os.path.splitext(nome_arquivo)[0]
+        df = pd.read_excel(arquivo)
+        planilhas[nome_planilha] = df
+
+    # Caminho para a planilha unificada
+    caminho_planilha_unificada = os.path.join(pasta_resultados, 'Planilha_Unificada.xlsx')
+
+    # Cria um objeto ExcelWriter para escrever em um novo arquivo Excel
+    with pd.ExcelWriter(caminho_planilha_unificada, engine='xlsxwriter') as escritor:
+        # Escreve cada DataFrame em uma aba separada
+        for nome_planilha, df in planilhas.items():
+            df.to_excel(escritor, sheet_name=nome_planilha, index=False)
+
+        # Concatena todos os DataFrames em um só
+        df_resultados = pd.concat(planilhas.values(), ignore_index=True)
+        # Escreve o DataFrame combinado na aba 'resultados'
+        df_resultados.to_excel(escritor, sheet_name='resultados', index=False)
+
+        # Cria a aba 'gráficos'
+        workbook = escritor.book
+        worksheet = workbook.add_worksheet('gráficos')
+        escritor.sheets['gráficos'] = worksheet
+
+        # Lista de colunas disponíveis para plotagem
+        colunas = df_resultados.columns.tolist()
+
+        # Escreve opções para seleção
+        worksheet.write('A1', 'Selecione o eixo X:')
+        worksheet.write('A2', 'Selecione o eixo Y:')
+        worksheet.write('A3', 'Selecione o eixo Z:')
+
+        # Cria uma planilha oculta para armazenar as opções das colunas
+        hidden_sheet = workbook.add_worksheet('hidden')
+        hidden_sheet.hide()
+        for idx, coluna in enumerate(colunas):
+            hidden_sheet.write_string(idx, 0, coluna)  # Escreve na coluna A da planilha 'hidden'
+
+        # Define a validação de dados para os menus suspensos usando as colunas da planilha 'hidden'
+        faixa_colunas = f"'hidden'!$A$1:$A${len(colunas)}"
+        for row in range(1, 4):
+            worksheet.data_validation(f'B{row}', {
+                'validate': 'list',
+                'source': faixa_colunas
+            })
+
+        # Escreve as fórmulas para obter os dados das colunas selecionadas
+        data_start_row = 5  # Linha inicial para os dados
+        data_start_col = 0  # Coluna inicial para os dados
+
+        # Escreve os cabeçalhos
+        worksheet.write(data_start_row, data_start_col, 'Eixo X')
+        worksheet.write(data_start_row, data_start_col + 1, 'Eixo Y')
+        worksheet.write(data_start_row, data_start_col + 2, 'Eixo Z')
+
+        num_dados = len(df_resultados)
+
+        # Escreve as fórmulas para cada linha de dados
+        for i in range(num_dados):
+            row = data_start_row + 1 + i
+            # Fórmula para o Eixo X
+            formula_x = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$1, resultados!$A$1:$ZZ$1, 0))"
+            # Fórmula para o Eixo Y
+            formula_y = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$2, resultados!$A$1:$ZZ$1, 0))"
+            # Fórmula para o Eixo Z
+            formula_z = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$3, resultados!$A$1:$ZZ$1, 0))"
+
+            worksheet.write_formula(row, data_start_col, formula_x)
+            worksheet.write_formula(row, data_start_col + 1, formula_y)
+            worksheet.write_formula(row, data_start_col + 2, formula_z)
+
+        # Cria o gráfico 2D usando os dados calculados, representando o terceiro eixo pelo tamanho dos marcadores
+        chart = workbook.add_chart({'type': 'scatter'})
+
+        # Define os dados para o gráfico usando referências de células
+        chart.add_series({
+            'name': 'Dados Selecionados',
+            'categories': [worksheet.name, data_start_row + 1, data_start_col, data_start_row + num_dados, data_start_col],
+            'values':     [worksheet.name, data_start_row + 1, data_start_col + 1, data_start_row + num_dados, data_start_col + 1],
+            'marker': {
+                'type': 'circle',
+                'size': 5,
+                'border': {'color': 'black'},
+                'fill':   {'color': '#FF9900'},
+            },
+            'points': [
+                {'fill': {'color': f'#{int(255 - (i / num_dados) * 255):02X}FF00'}} for i in range(num_dados)
+            ]
+        })
+        chart.set_title({'name': 'Gráfico 2D com 3 Eixos'})
+        chart.set_x_axis({'name': '=gráficos!$B$1'})
+        chart.set_y_axis({'name': '=gráficos!$B$2'})
+
+        # Inserimos o gráfico na planilha
+        worksheet.insert_chart('F5', chart)
+
+    # Move os arquivos originais para a pasta 'Arquivos_brutos'
+    for arquivo in arquivos_excel:
+        nome_arquivo = os.path.basename(arquivo)
+        destino = os.path.join(pasta_brutos, nome_arquivo)
+        shutil.move(arquivo, destino)
+
+    print("Planilhas unificadas com susso!")
+    print(f"Arquivos originais movidos para '{pasta_brutos}'.")
+
+
+
 
 def compila(df):
     # Corrigir separadores decimais e converter para numérico
@@ -229,7 +361,7 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.arange(10,400.1,5)
+volume_tanque = np.arange(10,11.1,1)
 #combs_vetor = np.linspace(1,1,1)
 
 
@@ -242,7 +374,7 @@ it = 0
 for bb,M_pulv_max in enumerate(volume_tanque):
     print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     M_comb_max = 1
-    dcomb = 0.25
+    dcomb = 1
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -1229,19 +1361,16 @@ for k in range(len(resultados)):
     resultado_file = os.path.join(resultados_path, f"RESULTADOS_{k}.xlsx")
     resultados[k].to_excel(resultado_file)
 
+# Chama a função
+print("Unificando planilhas")
+
+unificar_planilhas()
+
 # # Salvar o gráfico 3D na pasta `Resultados`
 # saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
 # fig_trajeto.write_html(saida_html)
 
-# # Assuming df1 is your DataFrame with the results
-
-# # Supondo que 'df' é o seu DataFrame
-# # Primeiro, identifique as colunas que precisam ser corrigidas
 # numeric_columns = df.columns.tolist()
-
-# # Remova colunas não numéricas ou que não precisam de correção
-# # Por exemplo, se 'STATUS' é uma coluna de texto, podemos excluí-la
-# numeric_columns.remove('STATUS')
 
 # # Substitua vírgulas por pontos e converta para float
 # for col in numeric_columns:
