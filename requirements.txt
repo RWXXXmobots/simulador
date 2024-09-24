@@ -1,0 +1,9 @@
+numpy
+matplotlib
+plotly
+pandas
+ipywidgets
+scipy
+ipython
+xlsxwriter
+dash

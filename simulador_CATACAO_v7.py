@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import pandas as pd
 import plotly.io as pio
+import plotly.express as px
 # from plotly.offline import plot
 pio.renderers.default='browser'
 # from scipy.interpolate import griddata
@@ -15,185 +16,238 @@ from ipywidgets import interact, fixed
 import ipywidgets as widgets
 from scipy.interpolate import griddata
 from IPython.display import display  # Import display function
+import glob
+import threading
+import shutil
+import argparse
+import sys
+from dash import Dash, dcc, html, Input, Output
 
-def compila(df):
-    # Corrigir separadores decimais e converter para numérico
-    numeric_columns = df.select_dtypes(include=['object', 'string']).columns.tolist()
-    for col in numeric_columns:
-        # Tenta converter strings numéricas com vírgulas em floats
-        df[col] = df[col].str.replace(',', '.').astype(float)
-    
-    # Obter a lista de colunas numéricas
-    columns = df.select_dtypes(include=[np.number]).columns.tolist()
-    
-    # Exibir a quantidade de dados por variável
-    print("\nQuantidade de pontos de dados por variável:")
-    for col in columns:
-        data = df[col]
-        num_unique = data.nunique()
-        num_total = data.count()
-        dtype = data.dtype
-        print(f"{col}: {num_total} pontos, {num_unique} únicos, Tipo: {dtype}")
-    
-    if len(columns) < 3:
-        print("\nNão há variáveis numéricas suficientes para plotar.")
-        return
-    
-    print("\nVariáveis disponíveis para plotagem:")
-    for idx, col in enumerate(columns):
-        print(f"{idx}: {col}")
-    
-    # Opção de escolher o tipo de gráfico
-    print("\nEscolha o tipo de gráfico:")
-    print("1: Superfície Interpolada")
-    print("2: Gráfico de Dispersão 3D")
-    plot_type = input("Digite 1 ou 2: ").strip()
-    
-    if plot_type not in ['1', '2']:
-        print("Opção inválida.")
-        return
-    
-    # Obter a entrada do usuário para as variáveis
-    x_var_idx = int(input("\nSelecione o índice para a variável do eixo X: "))
-    y_var_idx = int(input("Selecione o índice para a variável do eixo Y: "))
-    z_var_idx = int(input("Selecione o índice para a variável do eixo Z: "))
-    
-    x_var = columns[x_var_idx]
-    y_var = columns[y_var_idx]
-    z_var = columns[z_var_idx]
-    
-    if plot_type == '1':
-        # Solicitar variável de controle para o slider
-        slider_var_idx = int(input("Selecione o índice para a variável de controle (slider): "))
-        slider_var = columns[slider_var_idx]
-        unique_slider_values = np.sort(df[slider_var].unique())
-        
-        # Criar uma grade de valores x e y
-        x_lin = np.linspace(df[x_var].min(), df[x_var].max(), 50)
-        y_lin = np.linspace(df[y_var].min(), df[y_var].max(), 50)
-        X_grid, Y_grid = np.meshgrid(x_lin, y_lin)
-        
-        # Inicializar a figura
-        fig = go.Figure()
-        
-        # Criar quadros para cada valor da variável de controle
-        frames = []
-        for value in unique_slider_values:
-            data_subset = df[df[slider_var] == value]
-            if len(data_subset) < 3:
-                print(f"Pulando o valor {value} do slider devido a pontos de dados insuficientes ({len(data_subset)}).")
-                continue
-            
-            # Interpolar valores z na grade
-            try:
-                Z_grid = griddata(
-                    (data_subset[x_var], data_subset[y_var]),
-                    data_subset[z_var],
-                    (X_grid, Y_grid),
-                    method='linear'
-                )
-                
-                # Verificar se Z_grid contém todos NaNs
-                if np.isnan(Z_grid).all():
-                    print(f"Pulando o valor {value} do slider porque a interpolação resultou em todos NaNs.")
-                    continue
-                
-                # Criar a superfície
-                surface = go.Surface(
-                    x=X_grid,
-                    y=Y_grid,
-                    z=Z_grid,
-                    colorscale='Viridis',
-                    cmin=df[z_var].min(),
-                    cmax=df[z_var].max(),
-                    showscale=False,
-                    name=str(value)
-                )
-                
-                frames.append(go.Frame(data=[surface], name=str(value)))
-            
-            except Exception as e:
-                print(f"Pulando o valor {value} do slider devido ao erro de interpolação: {e}")
-                continue
-        
-        if not frames:
-            print("Nenhum quadro foi criado. Verifique se as variáveis selecionadas possuem dados suficientes.")
-            return
-        
-        # Dados iniciais
-        initial_frame = frames[0]
-        
-        # Layout com slider
-        sliders = [dict(
-            steps=[dict(method='animate',
-                        args=[[frame.name], dict(mode='immediate',
-                                                 frame=dict(duration=500, redraw=True),
-                                                 transition=dict(duration=0))],
-                        label=frame.name) for frame in frames],
-            transition=dict(duration=0),
-            x=0,
-            y=0,
-            currentvalue=dict(font=dict(size=12), prefix=slider_var + ': ', visible=True, xanchor='center'),
-            len=1.0
-        )]
-        
-        layout = go.Layout(
-            title='Gráfico Interativo de Superfície 3D',
-            scene=dict(
-                xaxis=dict(title=x_var),
-                yaxis=dict(title=y_var),
-                zaxis=dict(title=z_var)
+def criar_app_dash():
+    # Lê a planilha unificada
+    pasta_resultados = 'Resultados/'
+    arquivo_excel = os.path.join(pasta_resultados, 'Planilha_Unificada.xlsx')
+    df = pd.read_excel(arquivo_excel, sheet_name='resultados')
+
+    # Remove colunas não numéricas
+    df_numeric = df.select_dtypes(include=[float, int])
+    colunas_numericas = df_numeric.columns.tolist()
+
+    app = Dash(__name__)
+
+    app.layout = html.Div([
+        html.Div([
+            html.Label('Eixo X'),
+            dcc.Dropdown(
+                id='eixo-x',
+                options=[{'label': col, 'value': col} for col in colunas_numericas],
+                value=colunas_numericas[0]
             ),
-            sliders=sliders,
-            updatemenus=[dict(
-                type='buttons',
-                showactive=False,
-                y=1,
-                x=1.05,
-                xanchor='left',
-                yanchor='bottom',
-                buttons=[dict(label='Play',
-                              method='animate',
-                              args=[None, dict(frame=dict(duration=500, redraw=True),
-                                               transition=dict(duration=0),
-                                               fromcurrent=True,
-                                               mode='immediate')])]
-            )]
-        )
-        
-        fig = go.Figure(data=initial_frame.data, frames=frames, layout=layout)
-        
-    elif plot_type == '2':
-        # Criar o gráfico de dispersão 3D
-        fig = go.Figure(data=[go.Scatter3d(
-            x=df[x_var],
-            y=df[y_var],
-            z=df[z_var],
-            mode='markers',
-            marker=dict(
-                size=5,
-                color='blue'
+            html.Label('Eixo Y'),
+            dcc.Dropdown(
+                id='eixo-y',
+                options=[{'label': col, 'value': col} for col in colunas_numericas],
+                value=colunas_numericas[1]
+            ),
+            html.Label('Eixo Z'),
+            dcc.Dropdown(
+                id='eixo-z',
+                options=[{'label': col, 'value': col} for col in colunas_numericas],
+                value=colunas_numericas[2]
+            ),
+            html.Label('Eixo Slider'),
+            dcc.Dropdown(
+                id='eixo-slider',
+                options=[{'label': col, 'value': col} for col in colunas_numericas],
+                value=colunas_numericas[3]
+            ),
+        ], style={'width': '20%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+        html.Div([
+            dcc.Graph(id='grafico-3d')
+        ], style={'width': '75%', 'display': 'inline-block'}),
+    ])
+
+    @app.callback(
+        Output('grafico-3d', 'figure'),
+        Input('eixo-x', 'value'),
+        Input('eixo-y', 'value'),
+        Input('eixo-z', 'value'),
+        Input('eixo-slider', 'value')
+    )
+    def update_figure(eixo_x, eixo_y, eixo_z, eixo_slider):
+        valores_slider = sorted(df_numeric[eixo_slider].unique())
+        frames = []
+        for valor in valores_slider:
+            df_filtrado = df_numeric[df_numeric[eixo_slider] == valor]
+            scatter = go.Scatter3d(
+                x=df_filtrado[eixo_x],
+                y=df_filtrado[eixo_y],
+                z=df_filtrado[eixo_z],
+                mode='markers',
+                marker=dict(
+                    size=5,
+                    color=df_filtrado[eixo_z],
+                    colorscale='Viridis',
+                    opacity=0.8
+                ),
+                name=str(valor)
             )
-        )])
-        
-        fig.update_layout(
-            title='Gráfico de Dispersão 3D',
-            scene=dict(
-                xaxis=dict(title=x_var),
-                yaxis=dict(title=y_var),
-                zaxis=dict(title=z_var)
+            frames.append(go.Frame(data=[scatter], name=str(valor)))
+
+        fig = go.Figure(
+            data=frames[0].data,
+            frames=frames,
+            layout=go.Layout(
+                scene=dict(
+                    xaxis_title=eixo_x,
+                    yaxis_title=eixo_y,
+                    zaxis_title=eixo_z
+                ),
+                updatemenus=[dict(
+                    type='buttons',
+                    buttons=[dict(label='Play',
+                                  method='animate',
+                                  args=[None])]
+                )],
+                sliders=[dict(
+                    steps=[dict(method='animate',
+                                args=[[frame.name], dict(mode='immediate')],
+                                label=str(frame.name)) for frame in frames]
+                )]
             )
         )
-    
-    # Exibir o gráfico no navegador
-    fig.show(renderer="browser")
-    
-    # Opcionalmente, salvar o gráfico em um arquivo HTML
-    save_option = input("Deseja salvar o gráfico como um arquivo HTML? (sim/não): ").strip().lower()
-    if save_option == 'sim':
-        filename = input("Digite o nome do arquivo (com extensão .html): ").strip()
-        fig.write_html(filename)
-        print(f"Gráfico salvo como {filename}")
+        return fig
+
+    app.run_server(debug=True)
+
+
+def unificar_planilhas():
+    """
+    Unifica várias planilhas Excel em uma única, com opções interativas e gráficos 2D.
+    Também move os arquivos originais para uma subpasta 'Arquivos_brutos'.
+    """
+    # Caminho para a pasta 'Resultados'
+    pasta_resultados = 'Resultados/'
+    pasta_brutos = os.path.join(pasta_resultados, 'Arquivos_brutos')
+
+    # Cria a pasta 'Arquivos_brutos' se não existir
+    if not os.path.exists(pasta_brutos):
+        os.makedirs(pasta_brutos)
+
+    # Lista todos os arquivos xlsx na pasta 'Resultados' com o padrão de nomenclatura
+    arquivos_excel = glob.glob(os.path.join(pasta_resultados, 'RESULTADOS_*.xlsx'))
+
+    # Dicionário para armazenar DataFrames
+    planilhas = {}
+
+    # Lê cada arquivo e armazena no dicionário
+    for arquivo in arquivos_excel:
+        nome_arquivo = os.path.basename(arquivo)
+        nome_planilha = os.path.splitext(nome_arquivo)[0]
+        df = pd.read_excel(arquivo)
+        planilhas[nome_planilha] = df
+
+    # Caminho para a planilha unificada
+    caminho_planilha_unificada = os.path.join(pasta_resultados, 'Planilha_Unificada.xlsx')
+
+    # Cria um objeto ExcelWriter para escrever em um novo arquivo Excel
+    with pd.ExcelWriter(caminho_planilha_unificada, engine='xlsxwriter') as escritor:
+        # Escreve cada DataFrame em uma aba separada
+        for nome_planilha, df in planilhas.items():
+            df.to_excel(escritor, sheet_name=nome_planilha, index=False)
+
+        # Concatena todos os DataFrames em um só
+        df_resultados = pd.concat(planilhas.values(), ignore_index=True)
+        # Escreve o DataFrame combinado na aba 'resultados'
+        df_resultados.to_excel(escritor, sheet_name='resultados', index=False)
+
+        # Cria a aba 'gráficos'
+        workbook = escritor.book
+        worksheet = workbook.add_worksheet('gráficos')
+        escritor.sheets['gráficos'] = worksheet
+
+        # Lista de colunas disponíveis para plotagem
+        colunas = df_resultados.columns.tolist()
+
+        # Escreve opções para seleção
+        worksheet.write('A1', 'Selecione o eixo X:')
+        worksheet.write('A2', 'Selecione o eixo Y:')
+        worksheet.write('A3', 'Selecione o eixo Z:')
+
+        # Cria uma planilha oculta para armazenar as opções das colunas
+        hidden_sheet = workbook.add_worksheet('hidden')
+        hidden_sheet.hide()
+        for idx, coluna in enumerate(colunas):
+            hidden_sheet.write_string(idx, 0, coluna)  # Escreve na coluna A da planilha 'hidden'
+
+        # Define a validação de dados para os menus suspensos usando as colunas da planilha 'hidden'
+        faixa_colunas = f"'hidden'!$A$1:$A${len(colunas)}"
+        for row in range(1, 4):
+            worksheet.data_validation(f'B{row}', {
+                'validate': 'list',
+                'source': faixa_colunas
+            })
+
+        # Escreve as fórmulas para obter os dados das colunas selecionadas
+        data_start_row = 5  # Linha inicial para os dados
+        data_start_col = 0  # Coluna inicial para os dados
+
+        # Escreve os cabeçalhos
+        worksheet.write(data_start_row, data_start_col, 'Eixo X')
+        worksheet.write(data_start_row, data_start_col + 1, 'Eixo Y')
+        worksheet.write(data_start_row, data_start_col + 2, 'Eixo Z')
+
+        num_dados = len(df_resultados)
+
+        # Escreve as fórmulas para cada linha de dados
+        for i in range(num_dados):
+            row = data_start_row + 1 + i
+            # Fórmula para o Eixo X
+            formula_x = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$1, resultados!$A$1:$ZZ$1, 0))"
+            # Fórmula para o Eixo Y
+            formula_y = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$2, resultados!$A$1:$ZZ$1, 0))"
+            # Fórmula para o Eixo Z
+            formula_z = f"=INDEX(resultados!$A$2:$ZZ${num_dados + 1}, {i + 1}, MATCH($B$3, resultados!$A$1:$ZZ$1, 0))"
+
+            worksheet.write_formula(row, data_start_col, formula_x)
+            worksheet.write_formula(row, data_start_col + 1, formula_y)
+            worksheet.write_formula(row, data_start_col + 2, formula_z)
+
+        # Cria o gráfico 2D usando os dados calculados, representando o terceiro eixo pelo tamanho dos marcadores
+        chart = workbook.add_chart({'type': 'scatter'})
+
+        # Define os dados para o gráfico usando referências de células
+        chart.add_series({
+            'name': 'Dados Selecionados',
+            'categories': [worksheet.name, data_start_row + 1, data_start_col, data_start_row + num_dados, data_start_col],
+            'values':     [worksheet.name, data_start_row + 1, data_start_col + 1, data_start_row + num_dados, data_start_col + 1],
+            'marker': {
+                'type': 'circle',
+                'size': 5,
+                'border': {'color': 'black'},
+                'fill':   {'color': '#FF9900'},
+            },
+            'points': [
+                {'fill': {'color': f'#{int(255 - (i / num_dados) * 255):02X}FF00'}} for i in range(num_dados)
+            ]
+        })
+        chart.set_title({'name': 'Gráfico 2D com 3 Eixos'})
+        chart.set_x_axis({'name': '=gráficos!$B$1'})
+        chart.set_y_axis({'name': '=gráficos!$B$2'})
+
+        # Inserimos o gráfico na planilha
+        worksheet.insert_chart('F5', chart)
+
+    # Move os arquivos originais para a pasta 'Arquivos_brutos'
+    for arquivo in arquivos_excel:
+        nome_arquivo = os.path.basename(arquivo)
+        destino = os.path.join(pasta_brutos, nome_arquivo)
+        shutil.move(arquivo, destino)
+
+    print("Planilhas unificadas com susso!")
+    print(f"Arquivos originais movidos para '{pasta_brutos}'.")
+
+#================================================== Preparação do algoritmo ===================================
 
 # Definir o caminho das pastas
 dados_path = os.path.join(os.getcwd(), "Dado0s")
@@ -205,6 +259,27 @@ if not os.path.exists(dados_path):
 
 if not os.path.exists(resultados_path):
     os.makedirs(resultados_path)
+
+parser = argparse.ArgumentParser(description='Descrição do seu programa')
+parser.add_argument('--plot', action='store_true', help='Executa apenas criar_grafico_interativo_html_com_slider')
+parser.add_argument('--uni', action='store_true', help='Executa apenas unificar_planilhas')
+args = parser.parse_args()
+
+if args.plot and args.uni:
+    unificar_planilhas()
+    #criar_grafico_interativo_html_com_slider()
+    criar_app_dash()
+
+    sys.exit()
+elif args.plot:
+    #criar_grafico_interativo_html_com_slider()
+    criar_app_dash()
+    sys.exit()
+elif args.uni:
+    unificar_planilhas()
+    sys.exit()
+
+#================================================== Inicio do algoritmo do Marcus ===================================
 
 t0 = time.time()
 # DADOS DE ENTRADA ALGORITIMO DE ROTA
@@ -229,9 +304,14 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
+<<<<<<< HEAD
 volume_tanque = np.arange(10,10.1,1)
 combs_vetor = np.arange(1,2.1,0.25)
 
+=======
+volume_tanque = np.arange(10,150.1,5)
+combs_vetor = np.linspace(1,80,10)
+>>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 #capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -240,9 +320,15 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
+<<<<<<< HEAD
     #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     #M_comb_max = 1
     #dcomb = 0.
+=======
+    print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
+    M_comb_max = 1
+    dcomb = 1
+>>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -1232,22 +1318,26 @@ for k in range(len(resultados)):
     resultado_file = os.path.join(resultados_path, f"RESULTADOS_{k}.xlsx")
     resultados[k].to_excel(resultado_file)
 
+<<<<<<< HEAD
 # Salvar o gráfico 3D na pasta `Resultados`
 saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
 fig_trajeto.write_html(saida_html)
+=======
+# Chama a função
+print("Unificando planilhas")
 
-# # Assuming df1 is your DataFrame with the results
+unificar_planilhas()
 
-# # Supondo que 'df' é o seu DataFrame
-# # Primeiro, identifique as colunas que precisam ser corrigidas
+#criar_grafico_interativo_html_com_slider()
+
+# # Salvar o gráfico 3D na pasta `Resultados`
+# saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
+# fig_trajeto.write_html(saida_html)
+>>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
+
 # numeric_columns = df.columns.tolist()
-
-# # Remova colunas não numéricas ou que não precisam de correção
-# # Por exemplo, se 'STATUS' é uma coluna de texto, podemos excluí-la
-# numeric_columns.remove('STATUS')
 
 # # Substitua vírgulas por pontos e converta para float
 # for col in numeric_columns:
 #     df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
 
-# compila(df)
