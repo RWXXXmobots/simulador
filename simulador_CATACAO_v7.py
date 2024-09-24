@@ -985,8 +985,14 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
+<<<<<<< HEAD
+volume_tanque = np.arange(10,10.1,1)
+combs_vetor = np.arange(1,2.1,0.25)
+
+=======
 volume_tanque = np.arange(10,150.1,5)
 combs_vetor = np.linspace(1,80,10)
+>>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 #capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -995,9 +1001,15 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
+<<<<<<< HEAD
+    #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
+    #M_comb_max = 1
+    #dcomb = 0.
+=======
     print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     M_comb_max = 1
     dcomb = 1
+>>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -1014,7 +1026,6 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     operacao = []
     TANQUES = []
     tempo_idas_vindas = []
-    Tempo_rtl = 0
     Tempo_rtw = 0
     talhao_maximus = []
     voo_vector = []
@@ -1044,6 +1055,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     VPULV = []
     VDESLOC = []
     PGERADOR = []
+    CV_CAP = []
     #while(M_comb_max <= 500):
     for aa in range(len(combs_vetor)):
         
@@ -1056,6 +1068,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         v_subida = 2.5  
         v_descida = -v_subida
         omega = 40.0                              #[graus/s]
+        Tempo_rtl = 0
         
         # MASSAS
         M_estrut = (18.3611161042012*np.log(M_pulv_max) - 30.178770579692)       #[kg]
@@ -1960,25 +1973,28 @@ def atribuir_cor(valor_t):
 
 # # Iterar sobre os vetores e a lista OP
 
+<<<<<<< HEAD
+
+
+
+# Atribuir cores com base no vetor t
+cores = [atribuir_cor(valor) for valor in t_horas]
+=======
 # # Atribuir cores com base no vetor t
 # cores = [atribuir_cor(valor) for valor in t_horas]
+>>>>>>> ed71c7afde07c5cb177bd207a7e7ebceb95666b0
 
-# fig_trajeto = go.Figure()
-# # # Adicionar linhas aos eixos x, y e z
+fig_trajeto = go.Figure()
+# # Adicionar linhas aos eixos x, y e z
 
-# fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
-# fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
+fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
+fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
 # #fig_trajeto.write_html("saida_sem_discreziar.html")
 
 # Ao final de cada simulação, salvar os resultados na pasta `Resultados`
 for k in range(len(resultados)):
     resultado_file = os.path.join(resultados_path, f"RESULTADOS_{k}.xlsx")
     resultados[k].to_excel(resultado_file)
-
-# Chama a função
-print("Unificando planilhas")
-
-unificar_planilhas()
 
 #criar_grafico_interativo_html_com_slider()
 
