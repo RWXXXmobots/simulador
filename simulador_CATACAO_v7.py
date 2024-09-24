@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from scipy.interpolate import griddata
+from scipy.interpolate import interp1d
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output, State
 
@@ -67,7 +68,22 @@ def criar_app_dash():
 
     # Layout do aplicativo
     app.layout = html.Div([
-        html.H1('Gráfico 3D Interativo', style={'textAlign': 'center', 'padding': '20px'}),
+        html.H1('Gráfico 2D/3D Interativo', style={'textAlign': 'center', 'padding': '20px'}),
+
+        # Dropdown para escolher entre 2D e 3D
+        html.Div([
+            html.Label('Escolha o Tipo de Gráfico'),
+            dcc.Dropdown(
+                id='tipo-grafico',
+                options=[
+                    {'label': 'Gráfico 3D', 'value': '3D'},
+                    {'label': 'Gráfico 2D', 'value': '2D'}
+                ],
+                value='3D',
+                clearable=False
+            ),
+        ], style={'width': '20%', 'display': 'inline-block', 'verticalAlign': 'top', 'padding': '20px'}),
+
         html.Div([
             # Dropdowns para seleção dos parâmetros do caso
             html.Div([
@@ -108,7 +124,8 @@ def criar_app_dash():
                 'verticalAlign': 'top',
                 'padding': '20px'
             }),
-            # Dropdowns para seleção dos eixos
+
+            # Dropdowns para seleção dos eixos (inclui controle de visibilidade do eixo Z)
             html.Div([
                 html.Label('Eixo X'),
                 dcc.Dropdown(
@@ -122,12 +139,15 @@ def criar_app_dash():
                     options=[],  # Será preenchido via callback
                     value=None
                 ),
-                html.Label('Eixo Z', style={'marginTop': '20px'}),
-                dcc.Dropdown(
-                    id='eixo-z',
-                    options=[],  # Será preenchido via callback
-                    value=None
-                ),
+                # Eixo Z só aparece se o gráfico for 3D
+                html.Div(id='div-eixo-z', children=[
+                    html.Label('Eixo Z', style={'marginTop': '20px'}),
+                    dcc.Dropdown(
+                        id='eixo-z',
+                        options=[],  # Será preenchido via callback
+                        value=None
+                    ),
+                ], style={'display': 'block'}),  # Inicialmente visível
                 html.Label('Eixo Slider', style={'marginTop': '20px'}),
                 dcc.Dropdown(
                     id='eixo-slider',
@@ -140,15 +160,17 @@ def criar_app_dash():
                 'verticalAlign': 'top',
                 'padding': '20px'
             }),
-            # Gráfico 3D
+
+            # Gráfico (2D ou 3D)
             html.Div([
-                dcc.Graph(id='grafico-3d', style={'height': '80vh'})
+                dcc.Graph(id='grafico', style={'height': '80vh'})
             ], style={
                 'width': '50%',
                 'display': 'inline-block',
                 'padding': '20px'
             }),
         ], style={'display': 'flex', 'justifyContent': 'space-between'}),
+
         # Áreas para mensagens de erro ou informações
         html.Div(id='message-load', style={
             'textAlign': 'center',
@@ -247,13 +269,14 @@ def criar_app_dash():
          Output('eixo-y', 'value'),
          Output('eixo-z', 'value'),
          Output('eixo-slider', 'value'),
-         Output('message-axes', 'children')],
-        [Input('dados-carregados', 'data')]
+         Output('div-eixo-z', 'style')],
+        [Input('dados-carregados', 'data'),
+         Input('tipo-grafico', 'value')]
     )
-    def atualizar_eixos(dados_carregados):
+    def atualizar_eixos(dados_carregados, tipo_grafico):
         if dados_carregados is None:
             # Não há dados carregados
-            return [], [], [], [], None, None, None, None, ''
+            return [], [], [], [], None, None, None, None, {'display': 'block'}
 
         # Recria o DataFrame a partir dos dados armazenados
         df_numeric = pd.DataFrame(dados_carregados)
@@ -270,24 +293,345 @@ def criar_app_dash():
         eixo_z_val = colunas_numericas[2] if len(colunas_numericas) >= 3 else None
         eixo_slider_val = colunas_numericas[3] if len(colunas_numericas) >= 4 else None
 
-        return options, options, options, options, eixo_x_val, eixo_y_val, eixo_z_val, eixo_slider_val, ''
+        # Se o tipo de gráfico for 2D, esconde o eixo Z
+        if tipo_grafico == '2D':
+            return options, options, [], options, eixo_x_val, eixo_y_val, None, eixo_slider_val, {'display': 'none'}
+        else:
+            return options, options, options, options, eixo_x_val, eixo_y_val, eixo_z_val, eixo_slider_val, {'display': 'block'}
 
-    # Callback 3: Gerar o Gráfico 3D
+    # Callback 3: Gerar o Gráfico (2D ou 3D)
     @app.callback(
-        [Output('grafico-3d', 'figure'),
+        [Output('grafico', 'figure'),
          Output('message-graph', 'children')],
         [Input('eixo-x', 'value'),
          Input('eixo-y', 'value'),
          Input('eixo-z', 'value'),
-         Input('eixo-slider', 'value')],
+         Input('eixo-slider', 'value'),
+         Input('tipo-grafico', 'value')],
         [State('dados-carregados', 'data')]
     )
-    def gerar_grafico(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados):
-        # Chama a função responsável por plotar o gráfico 3D
-        return plot_3D(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados)
+    def gerar_grafico(eixo_x, eixo_y, eixo_z, eixo_slider, tipo_grafico, dados_carregados):
+        # Chama a função responsável por plotar o gráfico 2D ou 3D
+        if tipo_grafico == '3D':
+            return plot_3D(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados)
+        else:
+            return plot_2D(eixo_x, eixo_y, eixo_slider, dados_carregados)
 
     # Inicia o servidor Dash
     app.run_server(debug=True)
+
+
+def plot_3D(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados):
+    if dados_carregados is None:
+        # Não há dados carregados
+        fig = go.Figure()
+        fig.update_layout(
+            title='Nenhum dado carregado. Selecione os parâmetros e clique em "Simula".',
+            scene=dict(
+                xaxis_title='',
+                yaxis_title='',
+                zaxis_title=''
+            ),
+            margin=dict(l=0, r=0, t=50, b=0)
+        )
+        return fig, ''
+
+    # Recria o DataFrame a partir dos dados armazenados
+    df_numeric = pd.DataFrame(dados_carregados)
+
+    # Verifica se os eixos selecionados existem nas colunas
+    for eixo in [eixo_x, eixo_y, eixo_z, eixo_slider]:
+        if eixo not in df_numeric.columns:
+            fig = go.Figure()
+            fig.update_layout(
+                title=f'A coluna "{eixo}" não foi encontrada na planilha.',
+                scene=dict(
+                    xaxis_title='',
+                    yaxis_title='',
+                    zaxis_title=''
+                ),
+                margin=dict(l=0, r=0, t=50, b=0)
+            )
+            return fig, f'A coluna "{eixo}" não foi encontrada na planilha.'
+
+    # Filtra os dados com base nos valores únicos do eixo_slider
+    valores_slider = sorted(df_numeric[eixo_slider].unique())
+    frames = []
+    mensagem = ''
+
+    for valor in valores_slider:
+        df_filtrado = df_numeric[df_numeric[eixo_slider] == valor]
+        # Verifica se há pelo menos 4 pontos para criar a superfície
+        if len(df_filtrado) >= 4:
+            # Cria uma grade para a interpolação
+            xi = np.linspace(df_filtrado[eixo_x].min(), df_filtrado[eixo_x].max(), 50)
+            yi = np.linspace(df_filtrado[eixo_y].min(), df_filtrado[eixo_y].max(), 50)
+            xi, yi = np.meshgrid(xi, yi)
+            # Interpola os dados
+            try:
+                zi = griddata(
+                    (df_filtrado[eixo_x], df_filtrado[eixo_y]),
+                    df_filtrado[eixo_z],
+                    (xi, yi),
+                    method='linear'
+                )
+                # Trata valores NaN resultantes da interpolação
+                zi = np.nan_to_num(zi, nan=np.nanmin(df_filtrado[eixo_z]))
+                # Cria a superfície
+                surface = go.Surface(
+                    x=xi,
+                    y=yi,
+                    z=zi,
+                    colorscale='Viridis',
+                    cmin=df_numeric[eixo_z].min(),
+                    cmax=df_numeric[eixo_z].max(),
+                    showscale=False,
+                    name=str(valor)
+                )
+                frames.append(go.Frame(data=[surface], name=str(valor)))
+            except Exception as e:
+                mensagem += f"Aviso: Erro ao interpolar para o valor {valor}: {e}. Plotando apenas pontos.<br>"
+                # Se a interpolação falhar, plota apenas pontos
+                scatter = go.Scatter3d(
+                    x=df_filtrado[eixo_x],
+                    y=df_filtrado[eixo_y],
+                    z=df_filtrado[eixo_z],
+                    mode='markers',
+                    marker=dict(
+                        size=5,
+                        color=df_filtrado[eixo_z],
+                        colorscale='Viridis',
+                        opacity=0.8
+                    ),
+                    name=str(valor)
+                )
+                frames.append(go.Frame(data=[scatter], name=str(valor)))
+        else:
+            # Se não houver pontos suficientes, plota apenas os pontos
+            mensagem += f"Aviso: Não há pontos suficientes para interpolação em {eixo_slider} = {valor}. Plotando apenas pontos.<br>"
+            scatter = go.Scatter3d(
+                x=df_filtrado[eixo_x],
+                y=df_filtrado[eixo_y],
+                z=df_filtrado[eixo_z],
+                mode='markers',
+                marker=dict(
+                    size=5,
+                    color=df_filtrado[eixo_z],
+                    colorscale='Viridis',
+                    opacity=0.8
+                ),
+                name=str(valor)
+            )
+            frames.append(go.Frame(data=[scatter], name=str(valor)))
+
+    # Verifica se há frames para evitar erros
+    if not frames:
+        fig = go.Figure()
+        fig.update_layout(
+            title='Nenhum dado disponível para exibir.',
+            scene=dict(
+                xaxis_title=eixo_x,
+                yaxis_title=eixo_y,
+                zaxis_title=eixo_z
+            ),
+            margin=dict(l=0, r=0, t=50, b=0)
+        )
+        return fig, 'Nenhum dado disponível para exibir.'
+
+    # Cria o slider
+    slider_steps = []
+    for frame in frames:
+        slider_step = dict(
+            method='animate',
+            args=[[frame.name], dict(mode='immediate',
+                                     frame=dict(duration=500, redraw=True),
+                                     transition=dict(duration=0))],
+            label=str(frame.name)
+        )
+        slider_steps.append(slider_step)
+
+    sliders = [dict(
+        active=0,
+        currentvalue={'prefix': f'{eixo_slider}: '},
+        pad={'t': 50},
+        steps=slider_steps
+    )]
+
+    # Cria a figura
+    fig = go.Figure(
+        data=frames[0].data,
+        frames=frames,
+        layout=go.Layout(
+            scene=dict(
+                xaxis_title=eixo_x,
+                yaxis_title=eixo_y,
+                zaxis_title=eixo_z
+            ),
+            sliders=sliders,
+            updatemenus=[dict(
+                type='buttons',
+                showactive=False,
+                y=1.15,
+                x=0.8,
+                xanchor='left',
+                yanchor='top',
+                pad=dict(t=0, r=10),
+                buttons=[dict(label='Play',
+                              method='animate',
+                              args=[None, dict(frame=dict(duration=500, redraw=True),
+                                               transition=dict(duration=0),
+                                               fromcurrent=True,
+                                               mode='immediate')])]
+            )],
+            margin=dict(l=0, r=0, t=0, b=0)
+        )
+    )
+
+    return fig, mensagem
+
+def plot_2D(eixo_x, eixo_y, eixo_slider, dados_carregados):
+    if dados_carregados is None:
+        # Não há dados carregados
+        fig = go.Figure()
+        fig.update_layout(
+            title='Nenhum dado carregado. Selecione os parâmetros e clique em "Simula".',
+            xaxis_title='',
+            yaxis_title='',
+            margin=dict(l=0, r=0, t=50, b=0)
+        )
+        return fig, ''
+
+    # Recria o DataFrame a partir dos dados armazenados
+    df_numeric = pd.DataFrame(dados_carregados)
+
+    # Verifica se os eixos selecionados existem nas colunas
+    for eixo in [eixo_x, eixo_y, eixo_slider]:
+        if eixo not in df_numeric.columns:
+            fig = go.Figure()
+            fig.update_layout(
+                title=f'A coluna "{eixo}" não foi encontrada na planilha.',
+                xaxis_title='',
+                yaxis_title='',
+                margin=dict(l=0, r=0, t=50, b=0)
+            )
+            return fig, f'A coluna "{eixo}" não foi encontrada na planilha.'
+
+    # Filtra os dados com base nos valores únicos do eixo_slider
+    valores_slider = sorted(df_numeric[eixo_slider].unique())
+    frames = []
+    mensagem = ''
+
+    for valor in valores_slider:
+        df_filtrado = df_numeric[df_numeric[eixo_slider] == valor]
+
+        # Realiza a interpolação cúbica spline para suavizar a curva
+        if len(df_filtrado) >= 4:
+            try:
+                # Ordena os valores de x para garantir que estejam em ordem crescente
+                df_filtrado = df_filtrado.sort_values(by=eixo_x)
+                
+                # Interpolação cúbica spline
+                f_interp = interp1d(df_filtrado[eixo_x], df_filtrado[eixo_y], kind='cubic', fill_value="extrapolate")
+                x_novo = np.linspace(df_filtrado[eixo_x].min(), df_filtrado[eixo_x].max(), 100)
+                y_novo = f_interp(x_novo)
+
+                # Cria a curva suavizada
+                scatter = go.Scatter(
+                    x=x_novo,
+                    y=y_novo,
+                    mode='lines',
+                    line=dict(width=2),
+                    name=f'{eixo_slider}: {valor}'
+                )
+            except Exception as e:
+                mensagem += f"Aviso: Erro ao interpolar os dados para {valor}: {e}.<br>"
+                scatter = go.Scatter(
+                    x=df_filtrado[eixo_x],
+                    y=df_filtrado[eixo_y],
+                    mode='markers',
+                    marker=dict(
+                        size=5,
+                        color=df_filtrado[eixo_y],
+                        colorscale='Viridis',
+                        opacity=0.8
+                    ),
+                    name=str(valor)
+                )
+        else:
+            # Se não houver pontos suficientes, plota os pontos diretamente
+            scatter = go.Scatter(
+                x=df_filtrado[eixo_x],
+                y=df_filtrado[eixo_y],
+                mode='markers+lines',
+                marker=dict(
+                    size=5,
+                    color=df_filtrado[eixo_y],
+                    colorscale='Viridis',
+                    opacity=0.8
+                ),
+                name=str(valor)
+            )
+
+        frames.append(go.Frame(data=[scatter], name=str(valor)))
+
+    # Verifica se há frames para evitar erros
+    if not frames:
+        fig = go.Figure()
+        fig.update_layout(
+            title='Nenhum dado disponível para exibir.',
+            xaxis_title=eixo_x,
+            yaxis_title=eixo_y,
+            margin=dict(l=0, r=0, t=50, b=0)
+        )
+        return fig, 'Nenhum dado disponível para exibir.'
+
+    # Cria o slider
+    slider_steps = []
+    for frame in frames:
+        slider_step = dict(
+            method='animate',
+            args=[[frame.name], dict(mode='immediate',
+                                     frame=dict(duration=500, redraw=True),
+                                     transition=dict(duration=0))],
+            label=str(frame.name)
+        )
+        slider_steps.append(slider_step)
+
+    sliders = [dict(
+        active=0,
+        currentvalue={'prefix': f'{eixo_slider}: '},
+        pad={'t': 50},
+        steps=slider_steps
+    )]
+
+    # Cria a figura
+    fig = go.Figure(
+        data=frames[0].data,
+        frames=frames,
+        layout=go.Layout(
+            xaxis_title=eixo_x,
+            yaxis_title=eixo_y,
+            sliders=sliders,
+            updatemenus=[dict(
+                type='buttons',
+                showactive=False,
+                y=1.15,
+                x=0.8,
+                xanchor='left',
+                yanchor='top',
+                pad=dict(t=0, r=10),
+                buttons=[dict(label='Play',
+                              method='animate',
+                              args=[None, dict(frame=dict(duration=500, redraw=True),
+                                               transition=dict(duration=0),
+                                               fromcurrent=True,
+                                               mode='immediate')])]
+            )],
+            margin=dict(l=0, r=0, t=0, b=0)
+        )
+    )
+
+    return fig, mensagem
 
 
 def plot_3D(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados):
