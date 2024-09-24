@@ -229,7 +229,7 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.arange(10,20.1,10)
+volume_tanque = np.arange(10,150.1,10)
 combs_vetor = np.linspace(1,30,30)
 
 
