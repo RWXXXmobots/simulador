@@ -229,8 +229,8 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.arange(10,150.1,10)
-combs_vetor = np.linspace(1,30,30)
+volume_tanque = np.arange(10,10.1,1)
+combs_vetor = np.arange(1,2.1,0.25)
 
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -240,7 +240,7 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
-    print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
+    #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     #M_comb_max = 1
     #dcomb = 0.
     #M_pulv_max = M_pulv_min 
@@ -259,7 +259,6 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     operacao = []
     TANQUES = []
     tempo_idas_vindas = []
-    Tempo_rtl = 0
     Tempo_rtw = 0
     talhao_maximus = []
     voo_vector = []
@@ -289,6 +288,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     VPULV = []
     VDESLOC = []
     PGERADOR = []
+    CV_CAP = []
     #while(M_comb_max <= 500):
     for aa in range(len(combs_vetor)):
         
@@ -301,6 +301,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         v_subida = 2.5  
         v_descida = -v_subida
         omega = 40.0                              #[graus/s]
+        Tempo_rtl = 0
         
         # MASSAS
         M_estrut = (18.3611161042012*np.log(M_pulv_max) - 30.178770579692)       #[kg]
@@ -1216,14 +1217,14 @@ def atribuir_cor(valor_t):
 
 
 
-# # Atribuir cores com base no vetor t
-# cores = [atribuir_cor(valor) for valor in t_horas]
+# Atribuir cores com base no vetor t
+cores = [atribuir_cor(valor) for valor in t_horas]
 
-# fig_trajeto = go.Figure()
-# # # Adicionar linhas aos eixos x, y e z
+fig_trajeto = go.Figure()
+# # Adicionar linhas aos eixos x, y e z
 
-# fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
-# fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
+fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
+fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
 # #fig_trajeto.write_html("saida_sem_discreziar.html")
 
 # Ao final de cada simulação, salvar os resultados na pasta `Resultados`
@@ -1231,9 +1232,9 @@ for k in range(len(resultados)):
     resultado_file = os.path.join(resultados_path, f"RESULTADOS_{k}.xlsx")
     resultados[k].to_excel(resultado_file)
 
-# # Salvar o gráfico 3D na pasta `Resultados`
-# saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
-# fig_trajeto.write_html(saida_html)
+# Salvar o gráfico 3D na pasta `Resultados`
+saida_html = os.path.join(resultados_path, "saida_sem_discreziar.html")
+fig_trajeto.write_html(saida_html)
 
 # # Assuming df1 is your DataFrame with the results
 
