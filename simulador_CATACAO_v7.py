@@ -361,9 +361,8 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-volume_tanque = np.arange(10,11.1,1)
-#combs_vetor = np.linspace(1,1,1)
-
+volume_tanque = np.arange(10,150.1,10)
+combs_vetor = np.linspace(1,30,30)
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 #capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -421,9 +420,9 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     VPULV = []
     VDESLOC = []
     PGERADOR = []
-    #for aa in range(len(combs_vetor)):
-    while(M_comb_max <= 500):
-        print("Comb [kg]: ",M_comb_max)
+    #while(M_comb_max <= 500):
+    for aa in range(len(combs_vetor)):
+        
         #print(round(bb/(len(volume_tanque)-1)*100,2),"%")
         # PULVERIZAÇÃO
         #Taxa = 10.0                               #[L/ha]      
@@ -437,8 +436,10 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         # MASSAS
         M_estrut = (18.3611161042012*np.log(M_pulv_max) - 30.178770579692)       #[kg]
         # M_comb_max = (2.5 + (M_pulv_max-10)*0.2375)*0.715
-        #M_comb_max = combs_vetor[aa]
+        M_comb_max = combs_vetor[aa]
         M_tot_in = M_comb_max + M_pulv_max + M_estrut
+        print("Comb [kg]: ",M_comb_max)
+        
         
         ganho_cons = 0.2
         tensao_max = 57.45
@@ -1092,8 +1093,8 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         if n_abs == 0:
             print("t2[h]: ",round(tempo_missao[len(tempo_missao)-1],4) ,"// t1[h]: ",round(tempo_missao[len(tempo_missao)-2],4) )
             break
-        else:
-            M_comb_max = M_comb_max + dcomb
+        # else:
+        #     M_comb_max = M_comb_max + dcomb
 
         
         # X0 = X - 10; Y0 = X0
