@@ -22,6 +22,7 @@ import shutil
 import argparse
 import sys
 from dash import Dash, dcc, html, Input, Output
+from scipy.interpolate import griddata
 
 def criar_app_dash():
     # Lê a planilha unificada
@@ -36,35 +37,38 @@ def criar_app_dash():
     app = Dash(__name__)
 
     app.layout = html.Div([
+        html.H1('Gráfico 3D Interativo', style={'textAlign': 'center'}),
         html.Div([
-            html.Label('Eixo X'),
-            dcc.Dropdown(
-                id='eixo-x',
-                options=[{'label': col, 'value': col} for col in colunas_numericas],
-                value=colunas_numericas[0]
-            ),
-            html.Label('Eixo Y'),
-            dcc.Dropdown(
-                id='eixo-y',
-                options=[{'label': col, 'value': col} for col in colunas_numericas],
-                value=colunas_numericas[1]
-            ),
-            html.Label('Eixo Z'),
-            dcc.Dropdown(
-                id='eixo-z',
-                options=[{'label': col, 'value': col} for col in colunas_numericas],
-                value=colunas_numericas[2]
-            ),
-            html.Label('Eixo Slider'),
-            dcc.Dropdown(
-                id='eixo-slider',
-                options=[{'label': col, 'value': col} for col in colunas_numericas],
-                value=colunas_numericas[3]
-            ),
-        ], style={'width': '20%', 'display': 'inline-block', 'verticalAlign': 'top'}),
-        html.Div([
-            dcc.Graph(id='grafico-3d')
-        ], style={'width': '75%', 'display': 'inline-block'}),
+            html.Div([
+                html.Label('Eixo X'),
+                dcc.Dropdown(
+                    id='eixo-x',
+                    options=[{'label': col, 'value': col} for col in colunas_numericas],
+                    value=colunas_numericas[10] #kg de ocmbustivel
+                ),
+                html.Label('Eixo Y'),
+                dcc.Dropdown(
+                    id='eixo-y',
+                    options=[{'label': col, 'value': col} for col in colunas_numericas],
+                    value=colunas_numericas[7] #Num de voos
+                ),
+                html.Label('Eixo Z'),
+                dcc.Dropdown(
+                    id='eixo-z',
+                    options=[{'label': col, 'value': col} for col in colunas_numericas],
+                    value=colunas_numericas[2]  #Capacidade operacional 
+                ),
+                html.Label('Eixo Slider'),
+                dcc.Dropdown(
+                    id='eixo-slider',
+                    options=[{'label': col, 'value': col} for col in colunas_numericas],
+                    value=colunas_numericas[1]  #Volume da calda como slider
+                ),
+            ], style={'width': '20%', 'display': 'inline-block', 'verticalAlign': 'top', 'padding': '20px'}),
+            html.Div([
+                dcc.Graph(id='grafico-3d', style={'height': '80vh'})
+            ], style={'width': '75%', 'display': 'inline-block'}),
+        ], style={'display': 'flex', 'justifyContent': 'space-between'})
     ])
 
     @app.callback(
@@ -75,25 +79,81 @@ def criar_app_dash():
         Input('eixo-slider', 'value')
     )
     def update_figure(eixo_x, eixo_y, eixo_z, eixo_slider):
+        # Filtra os dados com base nos valores únicos do eixo_slider
         valores_slider = sorted(df_numeric[eixo_slider].unique())
         frames = []
         for valor in valores_slider:
             df_filtrado = df_numeric[df_numeric[eixo_slider] == valor]
-            scatter = go.Scatter3d(
-                x=df_filtrado[eixo_x],
-                y=df_filtrado[eixo_y],
-                z=df_filtrado[eixo_z],
-                mode='markers',
-                marker=dict(
-                    size=5,
-                    color=df_filtrado[eixo_z],
-                    colorscale='Viridis',
-                    opacity=0.8
-                ),
-                name=str(valor)
-            )
-            frames.append(go.Frame(data=[scatter], name=str(valor)))
+            # Verifica se há pelo menos 4 pontos para criar a superfície
+            if len(df_filtrado) >= 4:
+                # Cria uma grade para a interpolação
+                xi = np.linspace(df_filtrado[eixo_x].min(), df_filtrado[eixo_x].max(), 50)
+                yi = np.linspace(df_filtrado[eixo_y].min(), df_filtrado[eixo_y].max(), 50)
+                xi, yi = np.meshgrid(xi, yi)
+                # Interpola os dados
+                try:
+                    zi = griddata(
+                        (df_filtrado[eixo_x], df_filtrado[eixo_y]),
+                        df_filtrado[eixo_z],
+                        (xi, yi),
+                        method='linear'
+                    )
+                    # Trata valores NaN resultantes da interpolação
+                    zi = np.nan_to_num(zi, nan=np.nanmin(df_filtrado[eixo_z]))
+                    # Cria a superfície
+                    surface = go.Surface(
+                        x=xi,
+                        y=yi,
+                        z=zi,
+                        colorscale='Viridis',
+                        cmin=df_numeric[eixo_z].min(),
+                        cmax=df_numeric[eixo_z].max(),
+                        showscale=False,
+                        name=str(valor)
+                    )
+                    frames.append(go.Frame(data=[surface], name=str(valor)))
+                except Exception as e:
+                    print(f"Erro ao interpolar para o valor {valor}: {e}")
+                    continue
+            else:
+                # Se não houver pontos suficientes, plota apenas os pontos
+                scatter = go.Scatter3d(
+                    x=df_filtrado[eixo_x],
+                    y=df_filtrado[eixo_y],
+                    z=df_filtrado[eixo_z],
+                    mode='markers',
+                    marker=dict(
+                        size=5,
+                        color=df_filtrado[eixo_z],
+                        colorscale='Viridis',
+                        opacity=0.8
+                    ),
+                    name=str(valor)
+                )
+                frames.append(go.Frame(data=[scatter], name=str(valor)))
 
+        # Verifica se há frames para evitar erros
+        if not frames:
+            return go.Figure()
+
+        # Cria o slider
+        slider_steps = []
+        for i, frame in enumerate(frames):
+            slider_step = dict(
+                method='animate',
+                args=[[frame.name], dict(mode='immediate', frame=dict(duration=500, redraw=True), transition=dict(duration=0))],
+                label=str(frame.name)
+            )
+            slider_steps.append(slider_step)
+
+        sliders = [dict(
+            active=0,
+            currentvalue={'prefix': f'{eixo_slider}: '},
+            pad={'t': 50},
+            steps=slider_steps
+        )]
+
+        # Cria a figura
         fig = go.Figure(
             data=frames[0].data,
             frames=frames,
@@ -103,21 +163,26 @@ def criar_app_dash():
                     yaxis_title=eixo_y,
                     zaxis_title=eixo_z
                 ),
+                sliders=sliders,
                 updatemenus=[dict(
                     type='buttons',
+                    showactive=False,
+                    y=1.15,
+                    x=0.8,
+                    xanchor='left',
+                    yanchor='top',
+                    pad=dict(t=0, r=10),
                     buttons=[dict(label='Play',
                                   method='animate',
-                                  args=[None])]
+                                  args=[None, dict(frame=dict(duration=500, redraw=True),
+                                                   transition=dict(duration=0),
+                                                   fromcurrent=True,
+                                                   mode='immediate')])]
                 )],
-                sliders=[dict(
-                    steps=[dict(method='animate',
-                                args=[[frame.name], dict(mode='immediate')],
-                                label=str(frame.name)) for frame in frames]
-                )]
+                margin=dict(l=0, r=0, t=0, b=0)
             )
         )
         return fig
-
     app.run_server(debug=True)
 
 
