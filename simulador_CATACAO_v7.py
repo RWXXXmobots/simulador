@@ -21,67 +21,305 @@ import threading
 import shutil
 import argparse
 import sys
-from dash import Dash, dcc, html, Input, Output
 from scipy.interpolate import griddata
+from dash import Dash, dcc, html
+from dash.dependencies import Input, Output, State
 
 def criar_app_dash():
-    # Lê a planilha unificada
-    pasta_resultados = 'Resultados/'
-    arquivo_excel = os.path.join(pasta_resultados, 'Planilha_Unificada.xlsx')
-    df = pd.read_excel(arquivo_excel, sheet_name='resultados')
-
-    # Remove colunas não numéricas
-    df_numeric = df.select_dtypes(include=[float, int])
-    colunas_numericas = df_numeric.columns.tolist()
-
+    # Inicialização do aplicativo Dash
     app = Dash(__name__)
 
+    # Caminho para a pasta 'Resultados/'
+    pasta_resultados = 'Resultados/'
+
+    # Verifica se a pasta 'Resultados/' existe
+    if not os.path.exists(pasta_resultados):
+        raise FileNotFoundError(f"A pasta '{pasta_resultados}' não foi encontrada.")
+
+    # Obtém lista de subpastas dentro de 'Resultados/'
+    subfolders = [f.name for f in os.scandir(pasta_resultados) if f.is_dir()]
+
+    # Inicializa conjuntos para armazenar valores únicos dos parâmetros
+    tamanho_talhao = set()
+    infestacao = set()
+    tamanho_drone = set()
+    indice_teste = set()
+    tipo_rota = set()
+
+    # Padrão esperado: field_16ha_100ha_14%_6m_3_TSP
+    for folder in subfolders:
+        parts = folder.split('_')
+        if len(parts) >= 7:
+            tamanho_talhao.add(parts[1])    # Exemplo: '16ha'
+            infestacao.add(parts[3])         # Exemplo: '14%'
+            tamanho_drone.add(parts[4])      # Exemplo: '6m'
+            indice_teste.add(parts[5])       # Exemplo: '3'
+            tipo_rota.add(parts[6])          # Exemplo: 'TSP' ou 'LM'
+        else:
+            print(f"Aviso: Nome de pasta não corresponde ao padrão esperado: {folder}")
+
+    # Ordena as opções para os dropdowns
+    tamanho_talhao = sorted(tamanho_talhao)
+    infestacao = sorted(infestacao)
+    tamanho_drone = sorted(tamanho_drone)
+    indice_teste = sorted(indice_teste, key=lambda x: int(x))  # Ordena numericamente
+    tipo_rota = sorted(tipo_rota)
+
+    # Layout do aplicativo
     app.layout = html.Div([
-        html.H1('Gráfico 3D Interativo', style={'textAlign': 'center'}),
+        html.H1('Gráfico 3D Interativo', style={'textAlign': 'center', 'padding': '20px'}),
         html.Div([
+            # Dropdowns para seleção dos parâmetros do caso
+            html.Div([
+                html.Label('Tamanho talhão'),
+                dcc.Dropdown(
+                    id='tamanho-talhao',
+                    options=[{'label': t, 'value': t} for t in tamanho_talhao],
+                    value=tamanho_talhao[0] if tamanho_talhao else None
+                ),
+                html.Label('Infestação', style={'marginTop': '20px'}),
+                dcc.Dropdown(
+                    id='infestacao',
+                    options=[{'label': i, 'value': i} for i in infestacao],
+                    value=infestacao[0] if infestacao else None
+                ),
+                html.Label('Tamanho do drone', style={'marginTop': '20px'}),
+                dcc.Dropdown(
+                    id='tamanho-drone',
+                    options=[{'label': td, 'value': td} for td in tamanho_drone],
+                    value=tamanho_drone[0] if tamanho_drone else None
+                ),
+                html.Label('Índice do Teste', style={'marginTop': '20px'}),
+                dcc.Dropdown(
+                    id='indice-teste',
+                    options=[{'label': it, 'value': it} for it in indice_teste],
+                    value=indice_teste[0] if indice_teste else None
+                ),
+                html.Label('Tipo de rota', style={'marginTop': '20px'}),
+                dcc.Dropdown(
+                    id='tipo-rota',
+                    options=[{'label': tr, 'value': tr} for tr in tipo_rota],
+                    value=tipo_rota[0] if tipo_rota else None
+                ),
+                html.Button('Simula', id='botao-simula', n_clicks=0, style={'marginTop': '30px', 'padding': '10px 20px'})
+            ], style={
+                'width': '20%',
+                'display': 'inline-block',
+                'verticalAlign': 'top',
+                'padding': '20px'
+            }),
+            # Dropdowns para seleção dos eixos
             html.Div([
                 html.Label('Eixo X'),
                 dcc.Dropdown(
                     id='eixo-x',
-                    options=[{'label': col, 'value': col} for col in colunas_numericas],
-                    value=colunas_numericas[10] #kg de ocmbustivel
+                    options=[],  # Será preenchido via callback
+                    value=None
                 ),
-                html.Label('Eixo Y'),
+                html.Label('Eixo Y', style={'marginTop': '20px'}),
                 dcc.Dropdown(
                     id='eixo-y',
-                    options=[{'label': col, 'value': col} for col in colunas_numericas],
-                    value=colunas_numericas[7] #Num de voos
+                    options=[],  # Será preenchido via callback
+                    value=None
                 ),
-                html.Label('Eixo Z'),
+                html.Label('Eixo Z', style={'marginTop': '20px'}),
                 dcc.Dropdown(
                     id='eixo-z',
-                    options=[{'label': col, 'value': col} for col in colunas_numericas],
-                    value=colunas_numericas[2]  #Capacidade operacional 
+                    options=[],  # Será preenchido via callback
+                    value=None
                 ),
-                html.Label('Eixo Slider'),
+                html.Label('Eixo Slider', style={'marginTop': '20px'}),
                 dcc.Dropdown(
                     id='eixo-slider',
-                    options=[{'label': col, 'value': col} for col in colunas_numericas],
-                    value=colunas_numericas[1]  #Volume da calda como slider
+                    options=[],  # Será preenchido via callback
+                    value=None
                 ),
-            ], style={'width': '20%', 'display': 'inline-block', 'verticalAlign': 'top', 'padding': '20px'}),
+            ], style={
+                'width': '25%',
+                'display': 'inline-block',
+                'verticalAlign': 'top',
+                'padding': '20px'
+            }),
+            # Gráfico 3D
             html.Div([
                 dcc.Graph(id='grafico-3d', style={'height': '80vh'})
-            ], style={'width': '75%', 'display': 'inline-block'}),
-        ], style={'display': 'flex', 'justifyContent': 'space-between'})
-    ])
+            ], style={
+                'width': '50%',
+                'display': 'inline-block',
+                'padding': '20px'
+            }),
+        ], style={'display': 'flex', 'justifyContent': 'space-between'}),
+        # Áreas para mensagens de erro ou informações
+        html.Div(id='message-load', style={
+            'textAlign': 'center',
+            'color': 'red',
+            'padding': '10px',
+            'fontSize': '16px'
+        }),
+        html.Div(id='message-axes', style={
+            'textAlign': 'center',
+            'color': 'red',
+            'padding': '10px',
+            'fontSize': '16px'
+        }),
+        html.Div(id='message-graph', style={
+            'textAlign': 'center',
+            'color': 'red',
+            'padding': '10px',
+            'fontSize': '16px'
+        }),
+        # Componente para armazenar os dados carregados
+        dcc.Store(id='dados-carregados')
+    ], style={'height': '100vh', 'margin': '0', 'padding': '0'})
 
+    # Callback 1: Carregar Dados ao Clicar em "Simula"
     @app.callback(
-        Output('grafico-3d', 'figure'),
-        Input('eixo-x', 'value'),
-        Input('eixo-y', 'value'),
-        Input('eixo-z', 'value'),
-        Input('eixo-slider', 'value')
+        [Output('dados-carregados', 'data'),
+         Output('message-load', 'children')],
+        [Input('botao-simula', 'n_clicks')],
+        [State('tamanho-talhao', 'value'),
+         State('infestacao', 'value'),
+         State('tamanho-drone', 'value'),
+         State('indice-teste', 'value'),
+         State('tipo-rota', 'value')]
     )
-    def update_figure(eixo_x, eixo_y, eixo_z, eixo_slider):
+    def carregar_dados(n_clicks, tamanho_talhao_sel, infestacao_sel, tamanho_drone_sel, indice_teste_sel, tipo_rota_sel):
+        if n_clicks == 0:
+            # Ainda não clicou no botão
+            return None, ''
+
+        # Verifica se todos os parâmetros foram selecionados
+        if not all([tamanho_talhao_sel, infestacao_sel, tamanho_drone_sel, indice_teste_sel, tipo_rota_sel]):
+            return None, 'Por favor, selecione todos os parâmetros antes de simular.'
+
+        # Monta o nome da pasta com base nos parâmetros selecionados
+        selected_folder = None
+        for folder in subfolders:
+            parts = folder.split('_')
+            if len(parts) >= 7:
+                if (parts[1] == tamanho_talhao_sel and
+                    parts[3] == infestacao_sel and
+                    parts[4] == tamanho_drone_sel and
+                    parts[5] == indice_teste_sel and
+                    parts[6] == tipo_rota_sel):
+                    selected_folder = folder
+                    break
+
+        if not selected_folder:
+            # Se não encontrar a pasta correspondente
+            return None, 'Nenhum dado encontrado para a seleção atual. Verifique as combinações escolhidas.'
+
+        # Caminho para o arquivo Excel selecionado
+        arquivo_excel = os.path.join(pasta_resultados, selected_folder, 'Planilha_Unificada.xlsx')
+
+        # Imprime o nome da pasta que está sendo usada
+        print(f"Carregando dados da pasta: {selected_folder}")
+
+        # Verifica se o arquivo Excel existe
+        if not os.path.exists(arquivo_excel):
+            return None, 'Arquivo Excel não encontrado na pasta selecionada.'
+
+        # Tenta ler o arquivo Excel
+        try:
+            df = pd.read_excel(arquivo_excel, sheet_name='resultados')
+        except Exception as e:
+            return None, f'Erro ao ler o arquivo Excel: {e}'
+
+        # Remove colunas não numéricas
+        df_numeric = df.select_dtypes(include=[float, int])
+
+        # Verifica se há colunas numéricas suficientes
+        if len(df_numeric.columns) < 4:
+            return None, 'Não há colunas numéricas suficientes para criar o gráfico.'
+
+        # Transforma o DataFrame em um dicionário para armazenar no dcc.Store
+        dados = df_numeric.to_dict('records')
+
+        return dados, ''
+
+    # Callback 2: Atualizar Opções dos Dropdowns de Eixos com Base nos Dados Carregados
+    @app.callback(
+        [Output('eixo-x', 'options'),
+         Output('eixo-y', 'options'),
+         Output('eixo-z', 'options'),
+         Output('eixo-slider', 'options'),
+         Output('eixo-x', 'value'),
+         Output('eixo-y', 'value'),
+         Output('eixo-z', 'value'),
+         Output('eixo-slider', 'value'),
+         Output('message-axes', 'children')],
+        [Input('dados-carregados', 'data')]
+    )
+    def atualizar_eixos(dados_carregados):
+        if dados_carregados is None:
+            # Não há dados carregados
+            return [], [], [], [], None, None, None, None, ''
+
+        # Recria o DataFrame a partir dos dados armazenados
+        df_numeric = pd.DataFrame(dados_carregados)
+
+        # Obtém a lista de colunas numéricas
+        colunas_numericas = df_numeric.columns.tolist()
+
+        # Cria as opções para os eixos
+        options = [{'label': col, 'value': col} for col in colunas_numericas]
+
+        # Define valores padrão para os eixos (primeiras quatro colunas)
+        eixo_x_val = colunas_numericas[0] if len(colunas_numericas) >= 1 else None
+        eixo_y_val = colunas_numericas[1] if len(colunas_numericas) >= 2 else None
+        eixo_z_val = colunas_numericas[2] if len(colunas_numericas) >= 3 else None
+        eixo_slider_val = colunas_numericas[3] if len(colunas_numericas) >= 4 else None
+
+        return options, options, options, options, eixo_x_val, eixo_y_val, eixo_z_val, eixo_slider_val, ''
+
+    # Callback 3: Gerar o Gráfico 3D com Base nas Seleções dos Eixos
+    @app.callback(
+        [Output('grafico-3d', 'figure'),
+         Output('message-graph', 'children')],
+        [Input('eixo-x', 'value'),
+         Input('eixo-y', 'value'),
+         Input('eixo-z', 'value'),
+         Input('eixo-slider', 'value')],
+        [State('dados-carregados', 'data')]
+    )
+    def update_figure(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados):
+        if dados_carregados is None:
+            # Não há dados carregados
+            fig = go.Figure()
+            fig.update_layout(
+                title='Nenhum dado carregado. Selecione os parâmetros e clique em "Simula".',
+                scene=dict(
+                    xaxis_title='',
+                    yaxis_title='',
+                    zaxis_title=''
+                ),
+                margin=dict(l=0, r=0, t=50, b=0)
+            )
+            return fig, ''
+
+        # Recria o DataFrame a partir dos dados armazenados
+        df_numeric = pd.DataFrame(dados_carregados)
+
+        # Verifica se os eixos selecionados existem nas colunas
+        for eixo in [eixo_x, eixo_y, eixo_z, eixo_slider]:
+            if eixo not in df_numeric.columns:
+                fig = go.Figure()
+                fig.update_layout(
+                    title=f'A coluna "{eixo}" não foi encontrada na planilha.',
+                    scene=dict(
+                        xaxis_title='',
+                        yaxis_title='',
+                        zaxis_title=''
+                    ),
+                    margin=dict(l=0, r=0, t=50, b=0)
+                )
+                return fig, f'A coluna "{eixo}" não foi encontrada na planilha.'
+
         # Filtra os dados com base nos valores únicos do eixo_slider
         valores_slider = sorted(df_numeric[eixo_slider].unique())
         frames = []
+        mensagem = ''
+
         for valor in valores_slider:
             df_filtrado = df_numeric[df_numeric[eixo_slider] == valor]
             # Verifica se há pelo menos 4 pontos para criar a superfície
@@ -113,10 +351,25 @@ def criar_app_dash():
                     )
                     frames.append(go.Frame(data=[surface], name=str(valor)))
                 except Exception as e:
-                    print(f"Erro ao interpolar para o valor {valor}: {e}")
-                    continue
+                    mensagem += f"Aviso: Erro ao interpolar para o valor {valor}: {e}. Plotando apenas pontos.<br>"
+                    # Se a interpolação falhar, plota apenas pontos
+                    scatter = go.Scatter3d(
+                        x=df_filtrado[eixo_x],
+                        y=df_filtrado[eixo_y],
+                        z=df_filtrado[eixo_z],
+                        mode='markers',
+                        marker=dict(
+                            size=5,
+                            color=df_filtrado[eixo_z],
+                            colorscale='Viridis',
+                            opacity=0.8
+                        ),
+                        name=str(valor)
+                    )
+                    frames.append(go.Frame(data=[scatter], name=str(valor)))
             else:
                 # Se não houver pontos suficientes, plota apenas os pontos
+                mensagem += f"Aviso: Não há pontos suficientes para interpolação em {eixo_slider} = {valor}. Plotando apenas pontos.<br>"
                 scatter = go.Scatter3d(
                     x=df_filtrado[eixo_x],
                     y=df_filtrado[eixo_y],
@@ -134,14 +387,26 @@ def criar_app_dash():
 
         # Verifica se há frames para evitar erros
         if not frames:
-            return go.Figure()
+            fig = go.Figure()
+            fig.update_layout(
+                title='Nenhum dado disponível para exibir.',
+                scene=dict(
+                    xaxis_title=eixo_x,
+                    yaxis_title=eixo_y,
+                    zaxis_title=eixo_z
+                ),
+                margin=dict(l=0, r=0, t=50, b=0)
+            )
+            return fig, 'Nenhum dado disponível para exibir.'
 
         # Cria o slider
         slider_steps = []
-        for i, frame in enumerate(frames):
+        for frame in frames:
             slider_step = dict(
                 method='animate',
-                args=[[frame.name], dict(mode='immediate', frame=dict(duration=500, redraw=True), transition=dict(duration=0))],
+                args=[[frame.name], dict(mode='immediate',
+                                         frame=dict(duration=500, redraw=True),
+                                         transition=dict(duration=0))],
                 label=str(frame.name)
             )
             slider_steps.append(slider_step)
@@ -182,9 +447,11 @@ def criar_app_dash():
                 margin=dict(l=0, r=0, t=0, b=0)
             )
         )
-        return fig
-    app.run_server(debug=True)
 
+        return fig, mensagem
+
+    # Inicia o servidor Dash
+    app.run_server(debug=True)
 
 def unificar_planilhas():
     """
