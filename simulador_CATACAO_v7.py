@@ -241,11 +241,21 @@ def criar_app_dash():
         if not os.path.exists(arquivo_excel):
             return None, 'Arquivo Excel não encontrado na pasta selecionada.'
 
+        # Extrai o valor do talhão a partir do nome da pasta (Exemplo: '16ha')
+        tamanho_talhao = float(tamanho_talhao_sel.replace('ha', ''))
+
         # Tenta ler o arquivo Excel
         try:
             df = pd.read_excel(arquivo_excel, sheet_name='resultados')
         except Exception as e:
             return None, f'Erro ao ler o arquivo Excel: {e}'
+
+        # Verifica se a coluna "Capacidade operacional [ha/h]" existe
+        if 'Capacidade operacional [ha/h]' not in df.columns:
+            return None, 'A coluna "Capacidade operacional [ha/h]" não foi encontrada na planilha.'
+
+        # Multiplica os valores da coluna pela área do talhão e divide por 100
+        df['Capacidade operacional [ha/h]'] = df['Capacidade operacional [ha/h]'] * tamanho_talhao / 100
 
         # Remove colunas não numéricas
         df_numeric = df.select_dtypes(include=[float, int])
@@ -316,6 +326,64 @@ def criar_app_dash():
             return plot_3D(eixo_x, eixo_y, eixo_z, eixo_slider, dados_carregados)
         else:
             return plot_2D(eixo_x, eixo_y, eixo_slider, dados_carregados)
+
+    # Callback para atualizar os dropdowns de forma dependente
+    @app.callback(
+        [Output('infestacao', 'options'),
+         Output('infestacao', 'value'),
+         Output('tamanho-drone', 'options'),
+         Output('tamanho-drone', 'value'),
+         Output('tipo-rota', 'options'),
+         Output('tipo-rota', 'value'),
+         Output('indice-teste', 'options'),
+         Output('indice-teste', 'value')],
+        [Input('tamanho-talhao', 'value'),
+         Input('infestacao', 'value'),
+         Input('tamanho-drone', 'value'),
+         Input('tipo-rota', 'value')],
+        [State('tamanho-talhao', 'options'),
+         State('infestacao', 'options'),
+         State('tamanho-drone', 'options'),
+         State('tipo-rota', 'options')]
+    )
+    def atualizar_dropdowns(tamanho_talhao_sel, infestacao_sel, tamanho_drone_sel, tipo_rota_sel,
+                            tamanho_talhao_opts, infestacao_opts, tamanho_drone_opts, tipo_rota_opts):
+        # Lógica para filtrar as opções disponíveis com base nas seleções anteriores
+        available_options = {
+            'tamanho_talhao': set(),
+            'infestacao': set(),
+            'tamanho_drone': set(),
+            'tipo_rota': set(),
+            'indice_teste': set()
+        }
+
+        for folder in subfolders:
+            parts = folder.split('_')
+            if len(parts) >= 7:
+                talhao, inf, drone, teste, rota = parts[1], parts[3], parts[4], parts[5], parts[6]
+
+                if tamanho_talhao_sel is None or tamanho_talhao_sel == talhao:
+                    available_options['infestacao'].add(inf)
+                    if infestacao_sel is None or infestacao_sel == inf:
+                        available_options['tamanho_drone'].add(drone)
+                        if tamanho_drone_sel is None or tamanho_drone_sel == drone:
+                            available_options['tipo_rota'].add(rota)
+                            if tipo_rota_sel is None or tipo_rota_sel == rota:
+                                available_options['indice_teste'].add(teste)
+
+        # Atualiza as opções dos dropdowns
+        infestacao_options = [{'label': inf, 'value': inf} for inf in sorted(available_options['infestacao'])]
+        tamanho_drone_options = [{'label': drone, 'value': drone} for drone in sorted(available_options['tamanho_drone'])]
+        tipo_rota_options = [{'label': rota, 'value': rota} for rota in sorted(available_options['tipo_rota'])]
+        indice_teste_options = [{'label': teste, 'value': teste} for teste in sorted(available_options['indice_teste'], key=int)]
+
+        # Mantém o valor selecionado, se ainda for válido, ou define um novo padrão
+        infestacao_value = infestacao_sel if infestacao_sel in available_options['infestacao'] else infestacao_options[0]['value'] if infestacao_options else None
+        tamanho_drone_value = tamanho_drone_sel if tamanho_drone_sel in available_options['tamanho_drone'] else tamanho_drone_options[0]['value'] if tamanho_drone_options else None
+        tipo_rota_value = tipo_rota_sel if tipo_rota_sel in available_options['tipo_rota'] else tipo_rota_options[0]['value'] if tipo_rota_options else None
+        indice_teste_value = None if not indice_teste_options else indice_teste_options[0]['value']
+
+        return infestacao_options, infestacao_value, tamanho_drone_options, tamanho_drone_value, tipo_rota_options, tipo_rota_value, indice_teste_options, indice_teste_value
 
     # Inicia o servidor Dash
     app.run_server(debug=True)
