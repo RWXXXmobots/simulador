@@ -985,14 +985,11 @@ faixa = 5; faixa_min = faixa; faixa_max = 5
 delta_pulv = 1
 #faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
-<<<<<<< HEAD
-volume_tanque = np.arange(10,10.1,1)
-combs_vetor = np.arange(1,2.1,0.25)
 
-=======
+
 volume_tanque = np.arange(10,150.1,5)
 combs_vetor = np.linspace(1,80,10)
->>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
+
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 #capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -1001,15 +998,10 @@ resultados = []
 it = 0
 
 for bb,M_pulv_max in enumerate(volume_tanque):
-<<<<<<< HEAD
+
     #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     #M_comb_max = 1
     #dcomb = 0.
-=======
-    print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
-    M_comb_max = 1
-    dcomb = 1
->>>>>>> b9fe23d4903977712870eb1923ebebb600540b53
     #M_pulv_max = M_pulv_min 
     talhao_maximus = []
     voo_vector = []
@@ -1973,16 +1965,11 @@ def atribuir_cor(valor_t):
 
 # # Iterar sobre os vetores e a lista OP
 
-<<<<<<< HEAD
 
 
 
 # Atribuir cores com base no vetor t
 cores = [atribuir_cor(valor) for valor in t_horas]
-=======
-# # Atribuir cores com base no vetor t
-# cores = [atribuir_cor(valor) for valor in t_horas]
->>>>>>> ed71c7afde07c5cb177bd207a7e7ebceb95666b0
 
 fig_trajeto = go.Figure()
 # # Adicionar linhas aos eixos x, y e z
