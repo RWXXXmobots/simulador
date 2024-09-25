@@ -26,6 +26,8 @@ from scipy.interpolate import interp1d
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output, State
 
+#Opaaa
+
 def criar_app_dash():
     # Inicialização do aplicativo Dash
     app = Dash(__name__)
@@ -2062,4 +2064,3 @@ for k in range(len(resultados)):
 # # Substitua vírgulas por pontos e converta para float
 # for col in numeric_columns:
 #     df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
-
