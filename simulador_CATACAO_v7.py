@@ -26,6 +26,8 @@ from scipy.interpolate import interp1d
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output, State
 
+#Opaaa
+
 def criar_app_dash():
     # Inicialização do aplicativo Dash
     app = Dash(__name__)
