@@ -7,3 +7,5 @@ scipy
 ipython
 xlsxwriter
 dash
+openpyxl
+dash
