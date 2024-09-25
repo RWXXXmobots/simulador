@@ -15,10 +15,3 @@ for %%R in (%REQUISITOS%) do (
 :: Instala os requisitos do arquivo requirements.txt
 pip install -r requirements.txt
 
-py simulador_CATACAO_v7.py --plot
-
-:end
-:: Pausa para visualizar a saída
-pause
-
-endlocal
