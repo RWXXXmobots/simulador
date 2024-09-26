@@ -1642,7 +1642,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                     t[i+1] = t[i+1] + t_lavagem_limpeza + t_triplice_lavagem + t_desloc_pos_op
                 else:
                     OP.append("RTL-FIM\t")
-            elif(abs(x[i+1] - xp[j+1]) < 10**-6 and abs(y[i+1] - yp[j+1]) < 10**-6 and j == (len(dist_vector) -2)):
+            elif(abs(x[i+1] - xp[j+1]) < 1e-2 and abs(y[i+1] - yp[j+1]) < 1e-2 and j == (len(dist_vector) -2)):
                 theta_rtl = theta[i+1]
                 alpha = math.atan2(x[i+1],y[i+1])*180/math.pi
                 x_rtl = x[i+1]
@@ -1712,7 +1712,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                     #print(i,j)
             elif(OP[i]=="DESLOCANDO"):
                 if status[j] == "p":
-                    if (abs(x[i+1] -  xp[j+1]) < 1e-6 and abs(y[i+1] - yp[j+1]) < 1e-6 and z[i+1] == zi):
+                    if (abs(x[i+1] -  xp[j+1]) < 1e-2 and abs(y[i+1] - yp[j+1]) < 1e-2 and z[i+1] == zi):
                         OP.append("DESLOCANDO")
                         j = j + 1
                     else:
@@ -2064,4 +2064,3 @@ for k in range(len(resultados)):
 # # Substitua vírgulas por pontos e converta para float
 # for col in numeric_columns:
 #     df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
-
