@@ -2,12 +2,9 @@ import math
 import matplotlib.pyplot as plt
 import plotly.io as pio
 import plotly.express as px
-# from plotly.offline import plot
 pio.renderers.default='browser'
-# from scipy.interpolate import griddata
-#from CUSTOS import custos
 import time 
-#sou lindo
+#Marcus Ladrão rouvou meu coração
 from ipywidgets import interact, fixed
 import ipywidgets as widgets
 from IPython.display import display  # Import display function
@@ -23,6 +20,8 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.interpolate import griddata
 from scipy.interpolate import interp1d
+
+Debug_Fit_Celulas_Bat = True # Quando True printa um monte de merda
 # from dash import Dash, dcc, html
 # from dash.dependencies import Input, Output, State
 
@@ -932,7 +931,7 @@ from scipy.interpolate import interp1d
 
 # Definir o caminho das pastas
 dados_path = os.path.join(os.getcwd(), "Dado0s")
-resultados_path = os.path.join(os.getcwd(), "Resultados")
+resultados_path = os.path.join(os.getcwd(), "Resultados_Eletrico")
 
 # Verificar se as pastas existem, caso contrário, criar
 if not os.path.exists(dados_path):
@@ -987,8 +986,8 @@ delta_pulv = 1
 
 
 
-volume_tanque = np.arange(150,150.1,1)
-combs_vetor = np.linspace(40,40,1)
+volume_tanque = np.arange(40,40.1,20) #Euler (pode mudar)
+combs_vetor = np.linspace(5,5,5) #Euler (pode mudar)
 
 
 #produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
@@ -996,6 +995,155 @@ combs_vetor = np.linspace(40,40,1)
 area_total = 1000               # [ha]
 resultados = []
 it = 0
+
+#=========================== Área do Euler , XISPA [    não meche pufavo <:(    ] ================================
+
+
+def extrair_informacoes_baterias(arquivo_excel):
+    """
+    Lê o arquivo Excel (.xlsx), extrai até 25 linhas de cada planilha e identifica as informações das células de bateria,
+    incluindo valores presentes em colunas B e C ou apenas em C, ignorando valores N/A.
+
+    Parameters:
+        arquivo_excel (str): Caminho para o arquivo Excel
+
+    Returns:
+        pd.DataFrame: DataFrame contendo as informações das células extraídas.
+    """
+    # Verificar se o arquivo existe
+    if not os.path.exists(arquivo_excel):
+        raise FileNotFoundError(f"O arquivo '{arquivo_excel}' não foi encontrado.")
+
+    # Dicionário para armazenar as informações extraídas
+    dados_extracao = {
+        "Propriedade": [],
+        "Valor": [],
+        "Planilha": []  # Para armazenar o nome da planilha de origem
+    }
+
+    # Ler o arquivo Excel com todas as planilhas
+    xls = pd.ExcelFile(arquivo_excel, engine='openpyxl')
+
+    # Iterar sobre cada planilha
+    for sheet_name in xls.sheet_names:
+        # Ler até 25 linhas da planilha
+        df = pd.read_excel(xls, sheet_name=sheet_name, engine='openpyxl', nrows=25)
+
+        # Iterar pelas linhas do DataFrame
+        for index, row in df.iterrows():
+            propriedade = row.iloc[0]  # Valor da coluna A (Propriedade)
+            valor_b = row.iloc[1] if not pd.isna(row.iloc[1]) else None  # Valor na coluna B
+            valor_c = row.iloc[2] if not pd.isna(row.iloc[2]) else None  # Valor na coluna C
+
+            # Lógica para pegar o valor relevante entre as colunas B e C
+            if valor_b and valor_b != 'N/A':
+                valor = valor_b
+            elif valor_c and valor_c != 'N/A':
+                valor = valor_c
+            else:
+                valor = "Valor não disponível"
+
+            # Armazenar a propriedade, o valor e o nome da planilha no dicionário
+            dados_extracao["Propriedade"].append(propriedade)
+            dados_extracao["Valor"].append(valor)
+            dados_extracao["Planilha"].append(sheet_name)
+
+    # Converter o dicionário para um DataFrame para facilitar a visualização
+    dados_bateria_df = pd.DataFrame(dados_extracao)
+
+    return dados_bateria_df
+
+# Caminho para o arquivo Excel 'Database_de_Baterias.xlsx'
+#arquivo_excel = 'Database/Database_de_Baterias.xlsx'
+
+# Chama a função para extrair informações
+#informacoes_celulas = extrair_informacoes_baterias(arquivo_excel)
+
+# Configura o pandas para exibir todas as linhas do DataFrame
+#pd.set_option('display.max_rows', None)
+#pd.set_option('display.max_columns', None)
+
+# Imprime o DataFrame completo
+#print(informacoes_celulas)
+
+def plotar_celulas(informacoes_celulas, V_usuais):
+    """
+    Plota gráficos de Tensão x Corrente Requerida para cada célula baseada nas taxas de descarga.
+
+    Parameters:
+        informacoes_celulas (dict): Dicionário com as informações das células extraídas das planilhas.
+        V_usuais (list): Lista com valores de tensões usuais para células em série
+    """
+    for planilha, dados in informacoes_celulas.items():
+        # Obter a capacidade e a tensão nominal
+        capacidade = dados.loc[dados.iloc[:, 0] == 'Capacidade Nominal [mAh]', dados.columns[1]].values[0]
+        tensao_nominal = dados.loc[dados.iloc[:, 0] == 'Tensão na Célula [V]', dados.columns[1]].values[0]
+        taxa_descarga_max = dados.loc[dados.iloc[:, 0] == 'Taxa de Descarga [C]', dados.columns[1]].values[0]
+        
+        # Calcular a corrente máxima
+        I_max = (capacidade / 1000) * taxa_descarga_max  # Convertendo mAh para Ah
+
+        # Plotar gráfico baseado na taxa de descarga máxima
+        correntes_requeridas = [I_max / V for V in V_usuais]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(V_usuais, correntes_requeridas, marker='o')
+        plt.title(f'Tensão x Corrente Requerida para a célula da planilha {planilha}')
+        plt.xlabel('Tensão (V)')
+        plt.ylabel('Corrente Requerida (A)')
+        plt.grid(True)
+        plt.show()
+
+#def define_tesao(volume_tanque, A, M_tot_in, informacoes_celulas):
+def define_tesao(volume_tanque, A, M_tot_in):
+    """
+    Calcula a corrente requerida para cada valor de tensão em V_usuais.
+    Gera um gráfico de Corrente x Tensão.
+
+    Parameters:
+        volume_tanque (float): Tamanho do tanque em Litros
+        A (float): Área (calculada pela relação com massa total e número de motores)
+        M_tot_in (float): Massa total do sistema
+        informacoes_celulas (pd.DataFrame): DataFrame com as informações das células
+
+    """
+    # Definindo as variáveis----------------------------------
+    rho = 1.225  # densidade do ar em kg/m^3 (exemplo)
+    n = 8  # número de rotores (exemplo)
+    TOW = 2 * volume_tanque  # Takeoff weight (peso de decolagem) em Newtons (exemplo)
+    g = 9.8  # aceleração gravitacional em m/s^2
+    V_usuais = [12, 14, 18, 24, 32, 48]  # S de células
+    V_nom = 4.2
+    I_cel = []  # S de células
+
+    #Características da célula (Atualizar com database depois) --------------------------
+    # Welion Solid State
+    Capacidade_nom = 22 #Ah. Vc que se lasque Marcus >:(
+    C_rate = 6.13
+    Ciclos = 800
+    Massa = 299 #gramas
+    
+    # Multiplicação de V_usuais por V_nom
+    V_usuais = [v * V_nom for v in V_usuais]  # Corrige a multiplicação para operar sobre a lista
+
+    #print("V_usuais após multiplicação:", V_usuais)
+
+    # Cálculo do termo
+    W_G = ((1.25 / 0.75) * (TOW*g / (2 * rho * A * n))**0.5) * (g)  # não converte para kg. Pois o marcus adora tabalhar com Toneladas. KiloAmpere. Então aqui vai ser kg/W
+    P = M_tot_in*W_G
+    
+    I_max = C_rate*Capacidade_nom
+    V = P/I_max
+        
+    if Debug_Fit_Celulas_Bat:
+        print(f"g/W = {1000/W_G}")
+        print(f"Potência necessária [watts]: {P}")
+        print(f"Tensão [V]: {V}")
+
+    
+    return 0
+
+# ==========================================================================================================
 
 for bb,M_pulv_max in enumerate(volume_tanque):
 
@@ -1177,6 +1325,13 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             
         A =  (0.0431*M_tot_in + 0.7815)/n_motores
         Diametro = (4*A/np.pi)**0.5/0.0254    
+        
+        if Debug_Fit_Celulas_Bat:
+            print(f"Massa total [kg]: {M_tot_in}")
+            print(f"Area: {A}")
+            print(f"Volume tanque [kg]: {volume_tanque[bb]}")
+        #define_tesao(volume_tanque[bb], A, M_tot_in, informacoes_celulas) #Debug do Euler
+        define_tesao(volume_tanque[bb], A, M_tot_in) #Debug do Euler
         
         M_tot.append(M_tot_in)
         
