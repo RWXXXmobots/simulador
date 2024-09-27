@@ -2,9 +2,11 @@ import math
 import matplotlib.pyplot as plt
 import plotly.io as pio
 import plotly.express as px
+# from plotly.offline import plot
 pio.renderers.default='browser'
+# from scipy.interpolate import griddata
+#from CUSTOS import custos
 import time 
-#Marcus Ladrão rouvou meu coração
 from ipywidgets import interact, fixed
 import ipywidgets as widgets
 from IPython.display import display  # Import display function
@@ -20,8 +22,6 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.interpolate import griddata
 from scipy.interpolate import interp1d
-
-Debug_Fit_Celulas_Bat = True # Quando True printa um monte de merda
 # from dash import Dash, dcc, html
 # from dash.dependencies import Input, Output, State
 
@@ -931,7 +931,7 @@ Debug_Fit_Celulas_Bat = True # Quando True printa um monte de merda
 
 # Definir o caminho das pastas
 dados_path = os.path.join(os.getcwd(), "Dado0s")
-resultados_path = os.path.join(os.getcwd(), "Resultados_Eletrico")
+resultados_path = os.path.join(os.getcwd(), "Resultados")
 
 # Verificar se as pastas existem, caso contrário, criar
 if not os.path.exists(dados_path):
@@ -1136,8 +1136,7 @@ def define_tesao(volume_tanque, A, M_tot_in):
 
 # ==========================================================================================================
 
-for bb,M_pulv_max in enumerate(volume_tanque):
-
+for bb, M_pulv_max in enumerate(volume_tanque):
     #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
     voo_vector = []
     dias = []
@@ -1214,7 +1213,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         eta_helice = 0.7719                                                            # Eficiência hélice
         rho = 1.225
         cnst = 1/(eta_escmotor*eta_helice)
-        A =  (0.0431*M_tot_in + 0.7815)/n_motores
+        A =  (0.0431*(M_pulv_max + M_estrut) + 0.7815)/n_motores
         Diametro = (4*A/np.pi)**0.5/0.0254   
         
         
@@ -1238,7 +1237,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         M_tot = []
         M_pulv = []; M_pulv.append(M_pulv_max)
         E_bat = []; E_bat.append(E_bat_max)
-        
+
         
         # TEMPOS
         t = []; t.append(t_prep + t_desloc_pre_op)
@@ -1271,46 +1270,6 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         autonomia = [];
         dist_rtl = [];
         dist_rtl.append(0)
-       
-       
-       # T_motor = M_tot_in/8
-       # ef = (1000/9.81/(cnst*(np.sqrt(T_motor*9.81/(2*rho*A)))))
-       
-      
-        
-        while (abs(M_tot_in - M_tot_2) > 10**-3):
-            if a > 0:
-                M_tot_in = M_tot_2
-                
-            T_motor = M_tot_in/8
-            #P_gerador_max = 8*(1000 * T_motor/ef)
-            
-            # if M_pulv_max < 70:
-            P_gerador_max = 1000*T_motor/(0.001768*(60)**2 - 0.34614*60 + 22.511599)*8 + P_LED + P_sist + P_bombas + P_sensores
-            ef = 0.001768*(60)**2 - 0.34614*60 + 22.511599
-            # else:
-            #     ef = 1095.03924*(T_motor*1000)**-0.48364
-            #     P_gerador_max = 8*(1000 * T_motor/ef)
-            
-            #E_bat_max = P_gerador_max * (1.5 * (X) * math.sqrt(2))/(v_desloc*3600)
-            M_gerador = ((12.895*(P_gerador_max/(0.8*0.9*0.98*745.7))**2 + 60.062*P_gerador_max/(0.8*0.9*0.98*745.7)+1069.5)/1000+(0.0819*P_gerador_max/(0.9*0.98*0.8)+ 200.25)/1000)*1.15 
-            #M_bat = 0.000386020698965*(1000*E_bat_max/52.22) + 0.541952902354882 
-            #M_estrut = 0.554*(M_comb_max + M_pulv_max + M_gerador) + 5.3934
-            M_tot_2 = M_estrut + M_comb_max + M_pulv_max + M_gerador #+ M_bat
-    
-            #print("Ef: ",round(ef,2),"// Mtot= ",round(M_tot_in,2),"//P_gerador = ", round(P_gerador_max,2),"//M_gerador = ",round(M_gerador,2),"//M_estrutura = ",round(M_estrut,2),"//M_tot2 = ",round(M_tot_2,2))
-            a = a + 1
-            
-        A =  (0.0431*M_tot_in + 0.7815)/n_motores
-        Diametro = (4*A/np.pi)**0.5/0.0254    
-        
-        if Debug_Fit_Celulas_Bat:
-            print(f"Massa total [kg]: {M_tot_in}")
-            print(f"Area: {A}")
-            print(f"Volume tanque [kg]: {volume_tanque[bb]}")
-        #define_tesao(volume_tanque[bb], A, M_tot_in, informacoes_celulas) #Debug do Euler
-        define_tesao(volume_tanque[bb], A, M_tot_in) #Debug do Euler
-        
         produtiv_por_voo = []
         M_tot.append(M_tot_in)
         
@@ -1665,7 +1624,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             
             
             E_bat.append(E_bat[i] - Preq_tot[i]*dt/3600)        #[Wh]
-            print()
+           
             #P_hover = (n_motores*(COAXIAL_80*(1000 * (M_tot[i]/n_motores)/(1000/9.81/(cnst*(np.sqrt((M_tot[i]/n_motores)*9.81/(2*rho*A))))))))
             autonomia.append(3600*E_bat[i]/(Preq_tot[i]))  #(Preq_tot[i]))
             # print(E_bat[i],(Preq_tot[i]*dt/3600))
