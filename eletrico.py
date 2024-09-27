@@ -964,7 +964,7 @@ args = parser.parse_args()
 t0 = time.time()
 # DADOS DE ENTRADA ALGORITIMO DE ROTA
 # Definir o arquivo CSV de entrada
-csv_file = os.path.join(dados_path, "field_16ha_100ha_2%_12m_0_TSP.csv")
+csv_file = os.path.join(dados_path, "field_16ha_100ha_2%_12m_0_LM.csv")
 
 # Carregar o arquivo CSV
 df = pd.read_csv(csv_file, delimiter=';')
@@ -975,24 +975,15 @@ a_mato = df['area.mato[m2]'].values
 delta_theta = df['ang.proa[deg]'].values
 theta_abs = df['ang.abs[deg]'].values
 dist_vector = df['dist[m]'].values
-#dist_rtl = df['rtl[m]'].values
 status = df['operacao'].values
 
 n_motores = 8
-faixa = 5; faixa_min = faixa; faixa_max = 5
-#M_pulv_max = 40; M_pulv_min = M_pulv_max; M_pulv_lim = 40
-delta_pulv = 1
-#faixas = np.arange(faixa_min,faixa_max+0.1,1)
 
+volume_tanque = np.arange(40,40.1,1)        #[L]
+paralelos = np.arange(1,20.1,1)
 
-
-volume_tanque = np.arange(40,40.1,20) #Euler (pode mudar)
-combs_vetor = np.linspace(5,5,5) #Euler (pode mudar)
-
-
-#produtividade_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
-#capex_matriz = np.zeros((len(combs_vetor),len(volume_tanque)))
 area_total = 1000               # [ha]
+AREA = 16 # [ha]
 resultados = []
 it = 0
 
@@ -1148,10 +1139,6 @@ def define_tesao(volume_tanque, A, M_tot_in):
 for bb,M_pulv_max in enumerate(volume_tanque):
 
     #print("Tanque [L]: ",M_pulv_max,round(bb/(len(volume_tanque)-1)*100,2),"%")
-    #M_comb_max = 1
-    #dcomb = 0.
-    #M_pulv_max = M_pulv_min 
-    talhao_maximus = []
     voo_vector = []
     dias = []
     tempo_manobra = []
@@ -1160,7 +1147,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     tempo_missao = []   #[s]
     
     RESULTADOS = []
-    RESULTADOS.append(f'OP\t\tSTATUS\ti\tj\tx\ty\ttheta\tM_pulv\tM_comb\tPreq_tot\tv\tw\tvz')
+    RESULTADOS.append(f'OP\t\tSTATUS\ti\tj\tx\ty\ttheta\tM_pulv\tE_bat\tPreq_tot\tv\tw\tvz')
     RTLS = []
     
     operacao = []
@@ -1196,43 +1183,53 @@ for bb,M_pulv_max in enumerate(volume_tanque):
     VDESLOC = []
     PGERADOR = []
     CV_CAP = []
-    #while(M_comb_max <= 500):
-    for aa in range(len(combs_vetor)):
+    SERIE = []
+    PARALELOS = []
+    ENERGIA = []
+    M_BATERIA = []
+    for aa in range(len(paralelos)):
         
-        #print(round(bb/(len(volume_tanque)-1)*100,2),"%")
+        #BATERIA
+        cap_max = paralelos[aa]*8              #[Ah]
+        serie = 14
+        m_celula = 0.2142857                    #[kg]
+        M_bat = m_celula*serie*paralelos[aa]       #[kg]
+        tensao_nominal = 3.7*serie              #[V]
+        E_bat_max = cap_max*tensao_nominal      #[Ah]
+        
+        P_sensores = 0;
+        P_LED = 100
+        P_sist = 38.71
+        P_bombas = 95.04
+        
+        
+        # MASSAS
+        M_estrut = (18.3611161042012*np.log(M_pulv_max) - 30.178770579692)       #[kg]
+        #M_bat = 12      #[kg]
+        M_tot_in = M_bat + M_pulv_max + M_estrut
+        
+        
+        ## PROPULSAO
+        eta_escmotor = 0.848                                                           # Eficiência ESC e Motor
+        eta_helice = 0.7719                                                            # Eficiência hélice
+        rho = 1.225
+        cnst = 1/(eta_escmotor*eta_helice)
+        A =  (0.0431*M_tot_in + 0.7815)/n_motores
+        Diametro = (4*A/np.pi)**0.5/0.0254   
+        
+        
         # PULVERIZAÇÃO
-        #Taxa = 10.0                               #[L/ha]      
         v_pulv = 1.0                              #[m/s]
-        #vazao = Taxa/10000 * (v_pulv*60*faixa)    #[L/min]
         v_desloc = 10.0                           #[m/s]
         v_subida = 2.5  
         v_descida = -v_subida
         omega = 40.0                              #[graus/s]
         Tempo_rtl = 0
-        
-        # MASSAS
-        M_estrut = (18.3611161042012*np.log(M_pulv_max) - 30.178770579692)       #[kg]
-        # M_comb_max = (2.5 + (M_pulv_max-10)*0.2375)*0.715
-        M_comb_max = combs_vetor[aa]
-        M_tot_in = M_comb_max + M_pulv_max + M_estrut
-        print("Comb [kg]: ",M_comb_max)
-        
-        
-        ganho_cons = 0.2
-        tensao_max = 57.45
-        P_sensores = 0;
-        P_LED = 100
-        P_sist = 38.71
-        P_bombas = 95.04
-       
-        dt = 1                  #[s]
-        
-        t_prep = 300; t_abs_calda = M_pulv_max*60/50+20; t_abs_comb = 40; t_desloc_pre_op = 2520  
+
+        t_prep = 300; t_abs_calda = M_pulv_max*60/50+20; t_desloc_pre_op = 2520  
         t_desloc_pos_op = t_desloc_pre_op ;
         t_triplice_lavagem = 6*M_pulv_max/(6*2)*60;
         t_lavagem_limpeza = (2*(0.7*M_pulv_max/(6*2))+5)*60
-        
-        rtl_acumulado = 0
         
         n_abs = 0
         n = 1
@@ -1240,9 +1237,8 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         cons_pulv = []
         M_tot = []
         M_pulv = []; M_pulv.append(M_pulv_max)
-        M_comb = []; M_comb.append(M_comb_max)
-        cons_gas = []
-        comb_cons = []; comb_cons.append(0)
+        E_bat = []; E_bat.append(E_bat_max)
+        
         
         # TEMPOS
         t = []; t.append(t_prep + t_desloc_pre_op)
@@ -1250,12 +1246,8 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         t_manobra = []; t_manobra.append(0.0)
         t_de_voo = []; t_de_voo.append(0)
         calda_cons = []; calda_cons.append(0)
-        
-        # TALHÃO
-        #x0 = 20.0
-        #Z = zi
-        theta_dir = 0.0
-
+        dt = 1                  #[s]
+    
         OP = []
         STATUS = []
         v = []
@@ -1263,35 +1255,21 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         w = []
         dist_percorr = []; dist_percorr.append(0)
         dist_pulv = []; dist_pulv.append(0)
+        rtl_acumulado = 0
         
         x = []; x_rtl = 0
         y = []; y_rtl = 0
         z = []; z_rtl = 0
         theta = []; theta_rtl = 0
         alpha = 0
+        zi = 5
         
         x.append(0.0)
         y.append(0.0)
         z.append(0.0)
         theta.append(0.0)
-        #thetai = math.atan(xi/yi)*180/math.pi
         autonomia = [];
         dist_rtl = [];
-        produtiv_por_voo = []
-        
-        # CALCULO POTENCIA E MASSA DO GERADOR
-        zi = 5
-        a = 0
-        
-        
-        M_tot_2 = 0.0
-    
-        ## PROPULSAO
-        eta_escmotor = 0.848                                                           # Eficiência ESC e Motor
-        eta_helice = 0.7719                                                            # Eficiência hélice
-        rho = 1.225
-        cnst = 1/(eta_escmotor*eta_helice)
-        
         dist_rtl.append(0)
        
        
@@ -1333,7 +1311,10 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         #define_tesao(volume_tanque[bb], A, M_tot_in, informacoes_celulas) #Debug do Euler
         define_tesao(volume_tanque[bb], A, M_tot_in) #Debug do Euler
         
+        produtiv_por_voo = []
         M_tot.append(M_tot_in)
+        
+
         
         T_hover = []; PWM_hover = []; T_M1 = []; PWM_M1 = []; ef_M1 = []; Preq_M1 = []
         
@@ -1351,12 +1332,8 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         
         T_M8 = []; PWM_M8 = []; ef_M8 = []; Preq_M8 = []
         
-        
-        
         Preq_prop = []; P_gerador = []
         vazao_vetor = []
-        
-        
         
         Preq_tot = [];
         flag = "off"
@@ -1449,7 +1426,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                     
 
                 
-            if OP[i] == "RTL-CALDA\t" or OP[i] == "RTL-COMB\t" or OP[i] == "RTL-FIM\t":
+            if OP[i] == "RTL-CALDA\t" or OP[i] == "RTL-BAT\t" or OP[i] == "RTL-FIM\t":
                 vazao = 0
                 if theta_rtl > alpha:
                     if theta[i] > alpha:
@@ -1686,28 +1663,19 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             
             P_gerador.append(Preq_tot[i])
             
-            # cons_gas.append((((0.009424 * P_gerador[i] + 0 )*dt/60)*(1-ganho_cons))/1000)       # ENTRA FIT SFC GERADORES
             
-            SFC = 3065.6*M_tot[i]**-0.402
-            cons_gas.append(((SFC * P_gerador[i])*dt)/(3600*1000*1000))      # consumo em [kg/s], potencia em [W], SFC em [g/kW.h]
-
-            comb_cons.append(comb_cons[i] + cons_gas[i])
+            E_bat.append(E_bat[i] - Preq_tot[i]*dt/3600)        #[Wh]
+            print()
+            #P_hover = (n_motores*(COAXIAL_80*(1000 * (M_tot[i]/n_motores)/(1000/9.81/(cnst*(np.sqrt((M_tot[i]/n_motores)*9.81/(2*rho*A))))))))
+            autonomia.append(3600*E_bat[i]/(Preq_tot[i]))  #(Preq_tot[i]))
+            # print(E_bat[i],(Preq_tot[i]*dt/3600))
             
-            
-            if M_comb[i] - cons_gas[i] < 0:
-                M_comb.append(0)
-            else:
-                M_comb.append(M_comb[i] - cons_gas[i])
             if M_pulv[i] - cons_pulv[i] < 0:
                 M_pulv.append(0)
             else:
                 M_pulv.append(M_pulv[i] - cons_pulv[i])
                 
-            M_tot.append(M_estrut + M_comb[i+1] + M_pulv[i+1] + M_gerador) #+ M_bat)
-            if cons_gas[i] == 0:
-                autonomia.append(99999)
-            else:
-                autonomia.append(M_comb[i+1]/cons_gas[i])
+            M_tot.append(M_estrut + M_pulv[i+1] + M_bat)
                 
             calda_cons.append(calda_cons[i] + cons_pulv[i] )
             
@@ -1721,11 +1689,6 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                 if (x[i+1] == 0 and y[i+1] == 0 and z[i+1] == 0):
                     OP.append("FIM\t")
                     STATUS.append("CONCLUIDO\t")
-                    if voo == 1:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa)
-                    else:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa - produtiv_por_voo[len(produtiv_por_voo)-1])
-                    voo = voo + 1
                     t[i+1] = t[i+1] + t_lavagem_limpeza + t_triplice_lavagem + t_desloc_pos_op
                 else:
                     OP.append("RTL-FIM\t")
@@ -1740,17 +1703,12 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             elif(M_pulv[i+1] == 0 and (STATUS[i] != "YAW+" and STATUS[i] != "YAW-" )):
                 if (x[i+1] == 0 and y[i+1] == 0 and z[i+1] == 0):
                     OP.append("RTW\t")
-                    t_abs = 30
+                    E_bat[i+1] = E_bat_max
                     M_pulv[i+1] = M_pulv_max
+                    t[i+1] = t[i+1] + t_abs_calda
                     theta[i+1] = -alpha - 90
-                    if voo == 1:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa)
-                    else:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa - produtiv_por_voo[len(produtiv_por_voo)-1])
                     voo = voo + 1
-                    M_comb[i+1] = M_comb_max
-                    #n_abs = n_abs + 1 
-                    t[i+1] = t[i+1] + max(t_abs_calda,t_abs_comb)
+                    #n_abs = n_abs + 1
                 elif (OP[i] == "DESLOCANDO"):
                      theta_rtl = theta[i+1]
                      alpha = math.atan2(x[i+1],y[i+1])*180/math.pi
@@ -1762,40 +1720,34 @@ for bb,M_pulv_max in enumerate(volume_tanque):
                 else:
                     OP.append("RTL-CALDA\t")
                     
-            elif(OP[i] == "RTL-COMB\t" or (v_desloc*autonomia[i] <= 1.2*dist_rtl[i+1] and STATUS[i] != "YAW+" and STATUS[i] !="YAW-")):
+            elif(OP[i] == "RTL-BAT\t" or (v_desloc*autonomia[i] <= dist_rtl[i+1] and STATUS[i] != "YAW+" and STATUS[i] !="YAW-")):
                 if(OP[i] == "RTW\t"):
                     OP.append("FIM\t")
                     STATUS.append("INCOMLPLETO")
-                    print(i,"->>RTL-COMB\t")
+                    print(i,"->>RTL-BAT\t")
                 
                 if (x[i+1] == 0 and y[i+1] == 0 and z[i+1] == 0):
                     OP.append("RTW\t")
                     #print(round(M_pulv_max,3),round(M_comb_max,3),round(M_comb[i],3),round(M_pulv[i],3))
-                    t_abs = 30
-                    M_comb[i+1] = M_comb_max
+                    E_bat[i+1] = E_bat_max
                     M_pulv[i+1] = M_pulv_max
                     n_abs = n_abs + 1
-                    t[i+1] = t[i+1] + max(t_abs_calda,t_abs_comb)
+                    t[i+1] = t[i+1] + t_abs_calda
                     theta[i+1] = -alpha - 90
-                    #print(theta[i+1])
-                    if voo == 1:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa)
-                    else:
-                        produtiv_por_voo.append(dist_pulv[i+1]*faixa - produtiv_por_voo[len(produtiv_por_voo)-1])
                     voo = voo + 1
                     if theta[i+1] < 0:
                         theta[i+1] = theta[i+1] + 180   
-                elif (OP[i] != "RTL-COMB\t"):
+                elif (OP[i] != "RTL-BAT\t"):
                     theta_rtl = theta[i+1]
                     alpha = math.atan2(x[i+1],y[i+1])*180/math.pi
                     x_rtl = x[i+1]
                     y_rtl = y[i+1]
                     z_rtl = z[i+1]
-                    OP.append("RTL-COMB\t")
+                    OP.append("RTL-BAT\t")
                     rtl_acumulado = rtl_acumulado + math.sqrt(x_rtl**2 + y_rtl**2)
                     #print(i,j)
                 else:
-                    OP.append("RTL-COMB\t")
+                    OP.append("RTL-BAT\t")
                     #print(i,j)
             elif(OP[i]=="DESLOCANDO"):
                 if status[j] == "p":
@@ -1821,12 +1773,12 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             else:
                 OP.append(OP[i])
             
-            if (OP[i] == "RTL-COMB\t" or OP[i] == "RTL-CALDA\t" or OP[i] == "RTL-FIM\t" or OP[i] == "RTW\t"):
+            if (OP[i] == "RTL-BAT\t" or OP[i] == "RTL-CALDA\t" or OP[i] == "RTL-FIM\t" or OP[i] == "RTW\t"):
                 Tempo_rtl = Tempo_rtl + dt
             
             
                 
-            RESULTADOS.append(f'{OP[i]}\t{STATUS[i]}\t{i:.1f}\t{j:.1f}\t{x[i]:.1f}\t{y[i]:.1f}\t{theta[i]:.1f}\t{M_pulv[i]:.1f}\t{M_comb[i]:.1f}\t{Preq_tot[i]:.1f}\t{v[i]:.1f}\t{w[i]:.1f}\t{vz[i]:.1f}')
+            RESULTADOS.append(f'{OP[i]}\t{STATUS[i]}\t{i:.1f}\t{j:.1f}\t{x[i]:.1f}\t{y[i]:.1f}\t{theta[i]:.1f}\t{M_pulv[i]:.1f}\t{E_bat[i]:.1f}\t{Preq_tot[i]:.1f}\t{v[i]:.1f}\t{w[i]:.1f}\t{vz[i]:.1f}')
             # if i == 41322:
             #     flag = "on"
             # else:
@@ -1839,22 +1791,22 @@ for bb,M_pulv_max in enumerate(volume_tanque):
             
             
 #---------------- VETORES PARA RESULTADOS ---------------------------------#
-        # faixa_vector.append(faixa)
         tempo_missao.append(max(t) / 3600)  # Removido o arredondamento
         # dias.append(math.ceil(area_total/(X**2/10**4)))
         MTOW.append(M_tot_in)  # Removido o arredondamento
-        # produtividade.append(X**2/10**4/(max(t)/3600))
-        # talhao_maximus.append(X**2/10**4)
         voo_vector.append(voo)
         # area_por_voo.append(X**2/10**4/voo)
-        vol_comb.append(comb_cons[i] / 0.715)  # Removido o arredondamento
-        # vazao_bombas.append(vazao)
+        #vol_comb.append(comb_cons[i] / 0.715)  # Removido o arredondamento
         dist_percorrida.append(dist_percorr[i] / 1000)  # Removido o arredondamento
         dist_pulverizando.append(dist_pulv[i] / 1000)  # Removido o arredondamento
         EOC_km.append(dist_pulv[i] / dist_percorr[i])  # Removido o arredondamento
         EOC_hr.append(t_pulv[i] / t_de_voo[i])  # Removido o arredondamento
         abastecimentos.append(n_abs)
-        # capacidade_vector.append(cap_bat)
+        capacidade_vector.append(cap_max)
+        SERIE.append(serie)
+        PARALELOS.append(paralelos[aa])
+        ENERGIA.append(E_bat_max)
+        M_BATERIA.append(M_bat)
         TANQUES.append(M_pulv_max)
         RTLS.append(rtl_acumulado)  # Removido o arredondamento
         CALDA_CONS.append(calda_cons[i])  # Removido o arredondamento
@@ -1867,18 +1819,18 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         tempo_manobra.append(t_manobra[i] / 3600)  # Removido o arredondamento
         tempo_por_voo.append(t_de_voo[i] / voo / 60)  # Removido o arredondamento
         
-        AUTONOMIA_PROJ.append(M_comb_max / ((((0.009424 * P_gerador_max) * 1 / 60) * (1 - ganho_cons)) / 1000) / 3600)  # Removido o arredondamento
+       # AUTONOMIA_PROJ.append(M_comb_max / ((((0.009424 * P_gerador_max) * 1 / 60) * (1 - ganho_cons)) / 1000) / 3600)  # Removido o arredondamento
         MASSA_ESTRUTURA.append(M_estrut)  # Removido o arredondamento
-        COMBUSTIVEL.append(M_comb_max)  # Removido o arredondamento
-        GERADOR.append(M_gerador)  # Removido o arredondamento
-        PGERADOR.append(P_gerador_max)  # Removido o arredondamento
+        #COMBUSTIVEL.append(M_comb_max)  # Removido o arredondamento
+        #GERADOR.append(M_gerador)  # Removido o arredondamento
+        #PGERADOR.append(P_gerador_max)  # Removido o arredondamento
         VPULV.append(v_pulv)
         VDESLOC.append(v_desloc)
         
         
-        if n_abs == 0:
-            print("t2[h]: ",round(tempo_missao[len(tempo_missao)-1],4) ,"// t1[h]: ",round(tempo_missao[len(tempo_missao)-2],4) )
-            break
+        #if  abs(n_abs - min(n_abs))/min(n_abs) >  :
+        #    print("t2[h]: ",round(tempo_missao[len(tempo_missao)-1],4) ,"// t1[h]: ",round(tempo_missao[len(tempo_missao)-2],4) )
+        #    break
         # else:
         #     M_comb_max = M_comb_max + dcomb
 
@@ -1904,7 +1856,7 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         
         
     #======================= PLOTS =======================================#
-    produtividade = [100/x for x in tempo_missao]
+    produtividade = [AREA/x for x in tempo_missao]
     
     data = {
         # "Faixa [m]": faixa_vector,
@@ -1914,19 +1866,23 @@ for bb,M_pulv_max in enumerate(volume_tanque):
         "Tempo de missao [h]": [round(x, 2) for x in tempo_missao],
         "Tempo util [h]": [round(x, 2) for x in tempo_util],
         "Tempo por voo [min]": [round(x, 2) for x in tempo_por_voo],
-        "Autonomia Projetada [h]": [round(x, 2) for x in AUTONOMIA_PROJ],
+        #"Autonomia Projetada [h]": [round(x, 2) for x in AUTONOMIA_PROJ],
         "N° Voos": [round(x, 2) for x in voo_vector],
         # "Tempo operacional dias": dias,
         "MTOW [kg]": [round(x, 2) for x in MTOW],
         "Massa Estrutura [kg]": [round(x, 2) for x in MASSA_ESTRUTURA],
-        "Combustível [kg]": [round(x, 2) for x in COMBUSTIVEL],
+        #"Combustível [kg]": [round(x, 2) for x in COMBUSTIVEL],
         "Abastecimentos": [round(x, 2) for x in abastecimentos],
-        "Massa gerador": [round(x, 2) for x in GERADOR],
-        "Potência gerador [W]": [round(x, 2) for x in PGERADOR],
+        #"Massa gerador": [round(x, 2) for x in GERADOR],
+        #"Potência gerador [W]": [round(x, 2) for x in PGERADOR],
         # "Area pulverizada por dia [ha]": talhao_maximus,
         # "Hectare por voo [ha/voo]": area_por_voo,
-        # "Capacidade bateria [mha]": capacidade_vector, 
-        "Combustível consumido [L]": [round(x, 2) for x in vol_comb],
+        "Capacidade bateria [Ah]": capacidade_vector,
+        "S": SERIE,
+        "P": PARALELOS,
+        "Energia [Wh]":ENERGIA,
+        "Massa bateria [kg]": M_BATERIA,
+        #"Combustível consumido [L]": [round(x, 2) for x in vol_comb],
         "Calda cons [L]": [round(x, 2) for x in CALDA_CONS],
         # "Vazao [L/min]": vazao_bombas,
         "Distância percorrida [km]": [round(x, 2) for x in dist_percorrida],
@@ -2133,7 +2089,7 @@ fig_trajeto = go.Figure()
 
 fig_trajeto.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=cores, colorscale='Viridis', width=2),))
 fig_trajeto.update_layout(paper_bgcolor="white", showlegend=False, scene=dict(aspectmode='data'))
-fig_trajeto.write_html("saida_sem_discreziar.html")
+fig_trajeto.write_html("saida_eletrico.html")
 
 # Ao final de cada simulação, salvar os resultados na pasta `Resultados`
 for k in range(len(resultados)):
